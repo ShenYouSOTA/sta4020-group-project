@@ -1,6 +1,8 @@
 # Raw data: never commit, it is 600 MB and re-distributed separately.
 _incoming/
-data/
+# Ignore the payload but keep the layout documentation.
+data/*
+!data/README.md
 
 # Generated artifacts and reports
 artifacts/part2/*.csv

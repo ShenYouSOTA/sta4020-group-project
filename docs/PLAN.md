@@ -249,13 +249,20 @@ because nothing downstream of it can be real until it exists.
 - Freeze result sets by tag: part4_evaluation/reports/<tag>/ with the config
   block written into REPORT.md, so a quoted number can always be traced back to
   the exact inputs and cost assumption.
+- Every command in this document is run from the repository root, and every
+  path is relative to it: no absolute paths, no per-machine setup, no
+  particular user.  Python 3.11+; `make setup` creates .venv and installs the
+  package, `make check-data` verifies the raw data (which is not in git, see
+  data/README.md).
 - The final deliverable is one command per part:
 
 ~~~
-make test
-.venv/bin/python scripts/check_artifacts.py
-python part3_portfolio/Part3.py
-make evaluate TAG=final COST_BPS=10
+make setup
+make check-data
+make check-artifacts
+cd artifacts/sample && python ../../part3_portfolio/Part3.py   # Part 3 reads its
+                                                               # CSVs from the cwd
+cd ../.. && make evaluate TAG=final COST_BPS=10
 ~~~
 
 ## 7. Decision log

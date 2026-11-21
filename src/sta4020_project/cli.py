@@ -69,7 +69,7 @@ def cost_sensitivity(panels: dict[str, pd.DataFrame], realised: pd.DataFrame,
 def evaluate(weights_path: Path, expected_path: Path, actual_path: Path, out_dir: Path, *,
              risk_free_path: Path | None = None, cost_bps: float = 0.0,
              make_figures: bool = True, windows: dict | None = None,
-             cost_levels=None) -> dict:
+             cost_levels=None, weights_label: str | None = None) -> dict:
     """Run the full Part 4 evaluation and return the written paths."""
     expected = contracts.read_wide(expected_path, label=Path(expected_path).name)
     actual = contracts.read_wide(actual_path, label="Actual_Returns")
@@ -107,9 +107,9 @@ def evaluate(weights_path: Path, expected_path: Path, actual_path: Path, out_dir
 
     realised_dates = pd.DatetimeIndex(mapping.to_numpy())
     config = {
-        "weights file": str(weights_path),
-        "expected returns": str(expected_path),
-        "realised returns": str(actual_path),
+        "weights file": weights_label or _display_path(weights_path),
+        "expected returns": _display_path(expected_path),
+        "realised returns": _display_path(actual_path),
         "assets": len(assets),
         "origins": len(panels[list(panels)[0]].index) if panels else 0,
         "realised months": len(realised_dates),
@@ -133,6 +133,15 @@ def evaluate(weights_path: Path, expected_path: Path, actual_path: Path, out_dir
         frame.to_csv(subperiod_dir / f"{slug}.csv")
     written["subperiods"] = str(subperiod_dir)
     return written
+
+
+def _display_path(path) -> str:
+    """Report a path relative to the repository root so the log is portable."""
+    resolved = Path(path).resolve()
+    try:
+        return str(resolved.relative_to(Paths().root.resolve()))
+    except ValueError:
+        return str(resolved)
 
 
 def build_parser() -> argparse.ArgumentParser:

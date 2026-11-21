@@ -51,6 +51,8 @@ def main(argv: list[str] | None = None) -> int:
             risk_free_path=PROJECT / "data" / "risk_free.csv",
             cost_bps=arguments.cost_bps,
             cost_levels=(0.0, 10.0, 30.0, 50.0),
+            weights_label="scratch run of part3_portfolio/Part3.py on artifacts/sample "
+                          "(weights written to a temporary directory)",
         )
     for label, path in written.items():
         print(f"{label}: {path}")

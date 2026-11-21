@@ -9,61 +9,84 @@ Start with [docs/PLAN.md](docs/PLAN.md) - it holds the deadline map, the
 artifact contract that the four parts exchange, the work breakdown and the risk
 list.
 
+All commands below are run from the repository root, and every path in the code
+is relative to it.  Nothing depends on where the repository lives or on who
+runs it.
+
+## Requirements
+
+- Python 3.11 or newer
+- make (optional; the underlying commands are one line each)
+
+The default dependency sets are numpy, pandas, scipy and matplotlib, with
+pytest for the development extras.
+
+## Setup
+
+~~~bash
+make setup
+~~~
+
+which is a shortcut for:
+
+~~~bash
+python3 -m venv .venv
+.venv/bin/python -m pip install --upgrade pip
+.venv/bin/python -m pip install -e ".[dev]"
+~~~
+
+On Windows use .venv/Scripts/python.exe instead of .venv/bin/python.  After
+setup, .venv/bin/python is picked up automatically, or activate the environment
+and call python directly.
+
+## Quick start
+
+~~~bash
+make test            # unit tests for the shared code
+make sample          # end-to-end smoke test on the mock artifacts
+make check-data      # are the raw data files present?
+make check-artifacts # are the CSVs from Parts 1 and 2 well formed?
+~~~
+
+The smoke test runs the unmodified Part 3 script on the mock 20-asset,
+24-month panel that came inside the Part 3 zip, passes the weights through the
+Part 4 evaluation, and writes part4_evaluation/reports/sample/REPORT.md.  It
+proves that the hand-off works before the real Part 2 and Part 3 outputs exist.
+
+Evaluate the real artifacts once they have been delivered:
+
+~~~bash
+make evaluate TAG=run1 COST_BPS=10
+~~~
+
+## Raw data
+
+data/ is not committed: the payload is 530 MB and ships with the course
+material.  Copy it in, keeping the file names, then run make check-data.  The
+expected layout and the meaning of each file are documented in
+[data/README.md](data/README.md), which is tracked even though its neighbours
+are not.  price.h5 needs h5py, which is only required for the daily frequency
+route, so it is not in the default dependencies.
+
 ## Directory map
 
 | Path | What it is | Owner |
 | --- | --- | --- |
-| data/ | Raw vendor data: 5378 monthly returns, daily prices, market caps, turnover, blacklists, FF5, risk-free, CSI 500. 530 MB, never committed. | shared |
+| data/ | Raw vendor data: 5378 monthly returns, daily prices, market caps, turnover, blacklists, FF5, risk-free, CSI 500. Not committed. | shared |
 | docs/ | Project guideline PDF and the lecture slides. | shared |
 | docs/PLAN.md | Engineering plan: deadlines, interfaces, work breakdown, risks. | shared |
 | part1_return_model/ | Part 1 notebooks and their original README, unchanged as delivered. | Part 1 |
-| part2_risk_model/ | Part 2 package (import risk_model), its tests and the spec document. | Part 2 |
+| part2_risk_model/ | Part 2 package (import risk_model), its tests and the spec; vendored, see PROVENANCE.md. | Part 2 |
 | part3_portfolio/ | Part 3 script Part3.py, unchanged; reads three CSVs from the working directory. | Part 3 |
-| part4_evaluation/ | Part 4 report output: tables/, figures/, REPORT.md per run tag. | Part 4 |
+| part4_evaluation/ | Part 4 report output: tables/, figures/, REPORT.md per run tag. Not committed. | Part 4 |
 | src/sta4020_project/ | Shared code: artifact contracts, metrics, inference, backtest engine, attribution, reporting, CLI. | Part 4 (shared) |
 | artifacts/part1/ | Part 1 outputs: expected returns, realised returns, candidate universe. | Part 1 |
-| artifacts/part2/ | Part 2 output: P2_Covariance.csv (not delivered yet). | Part 2 |
-| artifacts/part3/ | Part 3 output: Portfolio_Weights.csv (not delivered yet). | Part 3 |
+| artifacts/part2/ | Part 2 output: P2_Covariance.csv. | Part 2 |
+| artifacts/part3/ | Part 3 output: Portfolio_Weights.csv. | Part 3 |
 | artifacts/sample/ | The mock 20-asset, 24-month panel from the Part 3 zip. Only used for smoke tests. | fixture |
-| scripts/ | Runnable entry points: artifact checker, sample pipeline. | shared |
+| scripts/ | Runnable entry points: data check, artifact check, sample pipeline. | shared |
 | tests/ | Unit tests for the shared code. | shared |
-| _incoming/ | The original zips, kept for provenance. 248 MB, never committed. | shared |
-
-## Quick start
-
-The interpreter used for everything below is the course virtual environment:
-
-~~~
-/home/Sota/research/data-analysis/STA4020/.venv/bin/python
-~~~
-
-Run the tests:
-
-~~~
-make test
-~~~
-
-Run the full pipeline on the mock data (Part 3 -> Part 4, 20 assets, 24 months).
-This is the smoke test that proves the hand-off works:
-
-~~~
-make sample
-~~~
-
-Then open part4_evaluation/reports/sample/REPORT.md.
-
-Validate the artifacts before integrating anything:
-
-~~~
-.venv/bin/python scripts/check_artifacts.py          # real artifacts
-.venv/bin/python scripts/check_artifacts.py --sample # mock artifacts
-~~~
-
-Evaluate the real artifacts once Parts 2 and 3 have delivered:
-
-~~~
-make evaluate TAG=run1 COST_BPS=10
-~~~
+| _incoming/ | The original zips, kept for provenance. Not committed. | shared |
 
 ## What each part must deliver
 
@@ -84,29 +107,23 @@ the others.
 - One branch per part, pull requests into main; the artifact contract is the
   review checklist for every pull request that touches a part boundary.
 - Never commit data/ or _incoming/; .gitignore already excludes them.
-- Run make test and scripts/check_artifacts.py before asking for a review.
+- Run make test, make check-data and make check-artifacts before asking for a
+  review.
 - Report numbers are only quoted from part4_evaluation/reports/, never from an
   ad-hoc notebook cell.
+- Record generated reports as tag directories; a tag is never overwritten by a
+  later run, because a number in the slides must stay reproducible.
 
-## Git
-
-Remote: https://github.com/ShenYouSOTA/sta4020-group-project (private, branch main).
-
-Run git as the WSL user Sota, not as root:
+## Getting a working copy
 
 ~~~bash
-su - Sota -c 'cd /home/Sota/research/data-analysis/STA4020/group-project && git status'
+git clone https://github.com/ShenYouSOTA/sta4020-group-project.git
+cd sta4020-group-project
+make setup
+# copy the raw data into data/, then:
+make check-data && make test && make sample
 ~~~
 
-Committing as root recreates root-owned files inside .git, after which every
-commit as Sota fails with "could not lock config file .git/config".  If that
-happens, fix it with:
-
-~~~bash
-chown -R Sota:Sota /home/Sota/research/data-analysis/STA4020/group-project
-~~~
-
-Authentication is the gh CLI credential helper over HTTPS (Sota's gh account,
-github.com/ShenYouSOTA); the folder's SSH key is not registered on GitHub, so
-keep the remote on https.  Data, _incoming/ and generated reports are ignored,
-so a clone is small and stays reproducible through data/ plus scripts/.
+If a fresh clone cannot write to .git because the directory was created by a
+different user, that is a local ownership problem, not a project one; fix the
+ownership of the clone rather than adding per-machine paths to the code.
