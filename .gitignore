@@ -1,0 +1,24 @@
+# Raw data: never commit, it is 600 MB and re-distributed separately.
+_incoming/
+data/
+
+# Generated artifacts and reports
+artifacts/part2/*.csv
+artifacts/part3/*.csv
+part3_portfolio/Part3_Results/
+part4_evaluation/reports/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# Editors and OS
+.idea/
+.vscode/
+.DS_Store
+*:Zone.Identifier
