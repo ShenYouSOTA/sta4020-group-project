@@ -87,3 +87,26 @@ the others.
 - Run make test and scripts/check_artifacts.py before asking for a review.
 - Report numbers are only quoted from part4_evaluation/reports/, never from an
   ad-hoc notebook cell.
+
+## Git
+
+Remote: https://github.com/ShenYouSOTA/sta4020-group-project (private, branch main).
+
+Run git as the WSL user Sota, not as root:
+
+~~~bash
+su - Sota -c 'cd /home/Sota/research/data-analysis/STA4020/group-project && git status'
+~~~
+
+Committing as root recreates root-owned files inside .git, after which every
+commit as Sota fails with "could not lock config file .git/config".  If that
+happens, fix it with:
+
+~~~bash
+chown -R Sota:Sota /home/Sota/research/data-analysis/STA4020/group-project
+~~~
+
+Authentication is the gh CLI credential helper over HTTPS (Sota's gh account,
+github.com/ShenYouSOTA); the folder's SSH key is not registered on GitHub, so
+keep the remote on https.  Data, _incoming/ and generated reports are ignored,
+so a clone is small and stays reproducible through data/ plus scripts/.
