@@ -77,7 +77,7 @@ route, so it is not in the default dependencies.
 | docs/PLAN.md | Engineering plan: deadlines, interfaces, work breakdown, risks. | shared |
 | part1_return_model/ | Part 1 notebooks and their original README, unchanged as delivered. | Part 1 |
 | part2_risk_model/ | Part 2 package (import risk_model), its tests and the spec; vendored, see PROVENANCE.md. | Part 2 |
-| part3_portfolio/ | Part 3 script Part3.py, unchanged; reads three CSVs from the working directory. | Part 3 |
+| part3_portfolio/ | Part 3 script Part3.py with a CLI; defaults to the artifacts tree. | Part 3 |
 | part4_evaluation/ | Part 4 report output: tables/, figures/, REPORT.md per run tag. Not committed. | Part 4 |
 | src/sta4020_project/ | Shared code: artifact contracts, metrics, inference, backtest engine, attribution, reporting, CLI. | Part 4 (shared) |
 | artifacts/part1/ | Part 1 outputs: expected returns, realised returns, candidate universe. | Part 1 |

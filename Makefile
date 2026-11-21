@@ -9,11 +9,12 @@ COST_SWEEP ?= 0,10,30,50
 # Let 'python -m sta4020_project...' work without installing the package.
 export PYTHONPATH := src
 
-.PHONY: help setup test sample evaluate check-data check-artifacts clean
+.PHONY: help setup test part3 sample evaluate check-data check-artifacts clean
 
 help:
 	@echo "make setup           create .venv and install the package plus pytest"
 	@echo "make test            run the unit tests"
+	@echo "make part3           build the portfolios from the real artifacts"
 	@echo "make sample          end-to-end smoke test on the mock artifacts"
 	@echo "make evaluate        run Part 4 on the real artifacts (TAG=latest COST_BPS=10)"
 	@echo "make check-data      verify the raw data files are present"
@@ -27,6 +28,9 @@ setup:
 
 test:
 	$(PYTHON) -m pytest tests -q
+
+part3:
+	$(PYTHON) part3_portfolio/Part3.py
 
 sample:
 	$(PYTHON) scripts/run_sample_pipeline.py --cost-bps $(COST_BPS) --tag sample

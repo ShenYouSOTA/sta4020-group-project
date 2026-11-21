@@ -69,23 +69,28 @@ Part 2 (see risk R2).
   construction of economic style descriptors are out of scope.  That work is
   therefore the Part 2 owner's remaining task, and it is the critical path.
 
-### Part 3 - portfolio construction (script delivered, fed with mock data)
+### Part 3 - portfolio construction (script repointed, run on mock data)
 
-- part3_portfolio/Part3.py reads P1_Expected_Returns.csv, Actual_Returns.csv and
-  P2_Covariance.csv from the working directory and writes
-  Part3_Results/Portfolio_Weights.csv, OOS_Portfolio_Returns.csv,
-  Forecast_Portfolio_Metrics.csv and Performance_Summary.csv.
+- part3_portfolio/Part3.py takes its inputs from the command line and defaults
+  them to the artifact tree, so no working directory matters: expected returns
+  from artifacts/part1 (the validated panel first, plain panel otherwise),
+  covariance from artifacts/part2/P2_Covariance.csv, realised returns from
+  artifacts/part1/Actual_Returns.csv, outputs into artifacts/part3.  It writes
+  Portfolio_Weights.csv, OOS_Portfolio_Returns.csv and
+  Forecast_Portfolio_Metrics.csv.
 - Five methods: Mean-Variance Optimization, Global Minimum Variance, Maximum
-  Diversification, Risk Parity, Black-Litterman.  Settings that are hard-coded
-  at the top of the file: PERIODS_PER_YEAR = 12, RISK_AVERSION = 5.0,
-  MAX_WEIGHT = None, RISK_FREE_RATE = 0.0.
+  Diversification, Risk Parity, Black-Litterman.  Settings default to
+  PERIODS_PER_YEAR = 12, RISK_AVERSION = 5.0, MAX_WEIGHT = None,
+  RISK_FREE_RATE = 0.0 and each is a flag.  The optimiser arithmetic is the
+  delivered version unchanged.
 - The delivered results come from mock data: 20 placeholder assets
   (Stock_01 .. Stock_20) over 24 months, 2023-01 .. 2024-12.  The guideline
   requires at least 5 years (60 months) of monthly OOS data, so this run cannot
   be quoted in the report.  It is a fixture, not a result.
-- Part3.py also computes its own four metrics.  Those are useful for a
-  reconciliation check, but the reported numbers must come from Part 4, which
-  adds costs, the 1/N benchmark and statistical tests.
+- Part3.py prints its own four uncosted metrics to the console as a
+  reconciliation check and no longer writes a summary table, because the
+  reported numbers must come from Part 4, which adds costs, the 1/N benchmark
+  and statistical tests.
 
 ### Part 4 - evaluation (harness implemented, tested)
 
@@ -178,11 +183,12 @@ Remaining work is explanation, not code:
 
 ### Part 3 - portfolio construction
 
-- Wire the inputs: read artifacts/part1 and artifacts/part2 instead of the
-  working directory, or stage them with a small runner.  Either way the
-  delivered Part3.py must be runnable end to end in one command.
+- Inputs are wired (done): artifacts/part1 and artifacts/part2 by default,
+  overridable per flag, so `make part3` is the one command.  What remains is
+  the real P2_Covariance.csv, which does not exist yet.
 - Add the constraints the report will claim: MAX_WEIGHT cap (for example 5% or
   10%), optional turnover penalty, and a documented choice of RISK_AVERSION.
+  The flags exist; the values still have to be chosen and justified.
 - Produce at least one sensitivity run: risk aversion 2, 5, 10 and a
   Black-Litterman variant with a different tau or a market-cap prior instead of
   1/N.
@@ -260,9 +266,8 @@ because nothing downstream of it can be real until it exists.
 make setup
 make check-data
 make check-artifacts
-cd artifacts/sample && python ../../part3_portfolio/Part3.py   # Part 3 reads its
-                                                               # CSVs from the cwd
-cd ../.. && make evaluate TAG=final COST_BPS=10
+make part3                      # reads artifacts/part1 and artifacts/part2
+make evaluate TAG=final COST_BPS=10
 ~~~
 
 ## 7. Decision log

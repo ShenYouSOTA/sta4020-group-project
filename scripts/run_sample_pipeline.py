@@ -2,9 +2,12 @@
 """End-to-end smoke test of the Part 3 -> Part 4 pipeline on the mock artifacts.
 
 The mock data in artifacts/sample is the fake 20 stock, 24 month panel that
-shipped inside the Part 3 zip. It is the only data where all four parts exist,
+shipped inside the Part 3 zip.  It is the only data where all four parts exist,
 so it is what proves the hand-off works before the real Part 1 and Part 2
 outputs are available.
+
+Part 3 is invoked through its command line with explicit paths, so the test does
+not depend on a working directory either.
 
 Usage:
     .venv/bin/python scripts/run_sample_pipeline.py [--cost-bps 10]
@@ -13,7 +16,6 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -24,14 +26,21 @@ sys.path.insert(0, str(PROJECT / "src"))
 
 from sta4020_project.cli import evaluate  # noqa: E402
 
+SAMPLE = PROJECT / "artifacts" / "sample"
 
-def run_part3(workdir: Path) -> Path:
-    """Run the unmodified Part 3 script inside a scratch directory."""
-    shutil.copy(PROJECT / "part3_portfolio" / "Part3.py", workdir / "Part3.py")
-    for name in ("P1_Expected_Returns.csv", "P2_Covariance.csv", "Actual_Returns.csv"):
-        shutil.copy(PROJECT / "artifacts" / "sample" / name, workdir / name)
-    subprocess.run([sys.executable, "Part3.py"], cwd=workdir, check=True)
-    return workdir / "Part3_Results" / "Portfolio_Weights.csv"
+
+def run_part3(output_dir: Path) -> Path:
+    """Run Part 3 on the mock artifacts and return the weights file."""
+    command = [
+        sys.executable,
+        str(PROJECT / "part3_portfolio" / "Part3.py"),
+        "--expected", str(SAMPLE / "P1_Expected_Returns.csv"),
+        "--covariance", str(SAMPLE / "P2_Covariance.csv"),
+        "--actual", str(SAMPLE / "Actual_Returns.csv"),
+        "--output-dir", str(output_dir),
+    ]
+    subprocess.run(command, check=True)
+    return output_dir / "Portfolio_Weights.csv"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -47,12 +56,11 @@ def main(argv: list[str] | None = None) -> int:
         risk_free_path = None
 
     with tempfile.TemporaryDirectory(prefix="sta4020-sample-") as temporary:
-        workdir = Path(temporary)
-        weights = run_part3(workdir)
+        weights = run_part3(Path(temporary))
         written = evaluate(
             weights,
-            PROJECT / "artifacts" / "sample" / "P1_Expected_Returns.csv",
-            PROJECT / "artifacts" / "sample" / "Actual_Returns.csv",
+            SAMPLE / "P1_Expected_Returns.csv",
+            SAMPLE / "Actual_Returns.csv",
             PROJECT / "part4_evaluation" / "reports" / arguments.tag,
             risk_free_path=risk_free_path,
             cost_bps=arguments.cost_bps,
