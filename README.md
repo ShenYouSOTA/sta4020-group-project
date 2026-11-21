@@ -10,63 +10,63 @@ artifact contract that the four parts exchange, the work breakdown and the risk
 list.
 
 All commands below are run from the repository root, and every path in the code
-is relative to it.  Nothing depends on where the repository lives or on who
-runs it.
+is resolved from the repository root, not from the working directory.  Nothing
+depends on where the repository lives or on who runs it.
 
 ## Requirements
 
-- Python 3.11 or newer
-- make (optional; the underlying commands are one line each)
+- [uv](https://docs.astral.sh/uv/) - the only tool to install.  uv fetches a
+  suitable Python (3.11 or newer) if the machine has none.
 
-The default dependency sets are numpy, pandas, scipy and matplotlib, with
-pytest for the development extras.
+Dependencies are pinned in uv.lock, which is committed: numpy, pandas, scipy
+and matplotlib, plus pytest for development.  The same lock file is what makes
+two people's numbers comparable, so update it deliberately
+(`uv add` / `uv lock`) rather than by hand.
 
 ## Setup
 
 ~~~bash
-make setup
+uv sync
 ~~~
 
-which is a shortcut for:
-
-~~~bash
-python3 -m venv .venv
-.venv/bin/python -m pip install --upgrade pip
-.venv/bin/python -m pip install -e ".[dev]"
-~~~
-
-On Windows use .venv/Scripts/python.exe instead of .venv/bin/python.  After
-setup, .venv/bin/python is picked up automatically, or activate the environment
-and call python directly.
+That creates .venv from uv.lock and installs the project in editable mode, so
+`import sta4020_project` works and the console scripts below are on the
+environment's PATH.  `uv run` keeps the environment in sync on every call, so
+you can skip this step and just run the commands.
 
 ## Quick start
 
 ~~~bash
-make test            # unit tests for the shared code
-make sample          # end-to-end smoke test on the mock artifacts
-make check-data      # are the raw data files present?
-make check-artifacts # are the CSVs from Parts 1 and 2 well formed?
+uv run pytest                    # unit tests for the shared code
+uv run sta4020-sample            # end-to-end smoke test on the mock artifacts
+uv run sta4020-check-data        # are the raw data files present?
+uv run sta4020-check-artifacts   # are the CSVs from Parts 1 and 2 well formed?
 ~~~
 
-The smoke test runs the unmodified Part 3 script on the mock 20-asset,
-24-month panel that came inside the Part 3 zip, passes the weights through the
-Part 4 evaluation, and writes part4_evaluation/reports/sample/REPORT.md.  It
-proves that the hand-off works before the real Part 2 and Part 3 outputs exist.
+The smoke test runs the Part 3 script on the mock 20-asset, 24-month panel that
+came inside the Part 3 zip, passes the weights through the Part 4 evaluation,
+and writes part4_evaluation/reports/sample/REPORT.md.  It proves that the
+hand-off works before the real Part 2 and Part 3 outputs exist.
 
-Evaluate the real artifacts once they have been delivered:
+Build the real portfolios and evaluate them once the artifacts exist:
 
 ~~~bash
-make evaluate TAG=run1 COST_BPS=10
+uv run python part3_portfolio/Part3.py                    # -> artifacts/part3
+uv run sta4020-evaluate --tag run1 --cost-bps 10          # -> reports/run1
 ~~~
+
+`--cost-sweep 0,10,30,50` (the default) adds the cost-sensitivity table; pass
+`--cost-sweep ''` to skip it.
 
 ## Raw data
 
 data/ is not committed: the payload is 530 MB and ships with the course
-material.  Copy it in, keeping the file names, then run make check-data.  The
-expected layout and the meaning of each file are documented in
-[data/README.md](data/README.md), which is tracked even though its neighbours
-are not.  price.h5 needs h5py, which is only required for the daily frequency
-route, so it is not in the default dependencies.
+material.  Copy it in, keeping the file names, then run
+`uv run sta4020-check-data`.  The expected layout and the meaning of each file
+are documented in [data/README.md](data/README.md), which is tracked even though
+its neighbours are not.  price.h5 needs h5py, which is only required for the
+daily frequency route, so it is not in the default dependencies
+(`uv add h5py` if you go that way).
 
 ## Directory map
 
@@ -79,14 +79,16 @@ route, so it is not in the default dependencies.
 | part2_risk_model/ | Part 2 package (import risk_model), its tests and the spec; vendored, see PROVENANCE.md. | Part 2 |
 | part3_portfolio/ | Part 3 script Part3.py with a CLI; defaults to the artifacts tree. | Part 3 |
 | part4_evaluation/ | Part 4 report output: tables/, figures/, REPORT.md per run tag. Not committed. | Part 4 |
-| src/sta4020_project/ | Shared code: artifact contracts, metrics, inference, backtest engine, attribution, reporting, CLI. | Part 4 (shared) |
+| src/sta4020_project/ | Shared code: artifact contracts, metrics, inference, backtest engine, attribution, reporting, checks, CLI. | Part 4 (shared) |
 | artifacts/part1/ | Part 1 outputs: expected returns, realised returns, candidate universe. | Part 1 |
 | artifacts/part2/ | Part 2 output: P2_Covariance.csv. | Part 2 |
 | artifacts/part3/ | Part 3 output: Portfolio_Weights.csv. | Part 3 |
 | artifacts/sample/ | The mock 20-asset, 24-month panel from the Part 3 zip. Only used for smoke tests. | fixture |
-| scripts/ | Runnable entry points: data check, artifact check, sample pipeline. | shared |
 | tests/ | Unit tests for the shared code. | shared |
 | _incoming/ | The original zips, kept for provenance. Not committed. | shared |
+
+There is no Makefile and no shell glue: every task is either a console script
+declared in pyproject.toml (`[project.scripts]`) or `uv run python <file>`.
 
 ## What each part must deliver
 
@@ -107,8 +109,8 @@ the others.
 - One branch per part, pull requests into main; the artifact contract is the
   review checklist for every pull request that touches a part boundary.
 - Never commit data/ or _incoming/; .gitignore already excludes them.
-- Run make test, make check-data and make check-artifacts before asking for a
-  review.
+- Run `uv run pytest`, `uv run sta4020-check-data` and
+  `uv run sta4020-check-artifacts` before asking for a review.
 - Report numbers are only quoted from part4_evaluation/reports/, never from an
   ad-hoc notebook cell.
 - Record generated reports as tag directories; a tag is never overwritten by a
@@ -123,9 +125,9 @@ the process is user specific.
 ~~~bash
 git clone https://github.com/ShenYouSOTA/sta4020-group-project.git
 cd sta4020-group-project
-make setup
+uv sync
 # copy the raw data into data/, then:
-make check-data && make test && make sample
+uv run sta4020-check-data && uv run pytest && uv run sta4020-sample
 ~~~
 
 If a fresh clone cannot write to .git because the directory was created by a

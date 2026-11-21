@@ -51,7 +51,7 @@ Part 2 (see risk R2).
   information available at or before each origin.  If it does not, the
   difference is look-ahead and the raw panel must be used instead.
   contracts.resolve_expected_returns() is the single switch.
-- Verified today by scripts/check_artifacts.py: 0 contract issues, 116 origins
+- Verified today by `uv run sta4020-check-artifacts`: 0 contract issues, 116 origins
   map one-to-one onto realised months.
 
 ### Part 2 - risk model (package delivered, real data not yet wired)
@@ -96,8 +96,8 @@ Part 2 (see risk R2).
 
 - src/sta4020_project/ implements the contract layer, metrics, inference,
   backtest engine with transaction costs, return attribution, reporting and a
-  CLI.  tests/ covers 20 behaviours.  scripts/run_sample_pipeline.py runs the
-  unmodified Part3.py on the mock panel and then Part 4 on its output, which
+  CLI.  tests/ covers 21 behaviours.  `uv run sta4020-sample` runs Part3.py on
+  the mock panel and then Part 4 on its output, which
   proves the hand-off end to end.
 - Sample run (20 assets, 24 months, 10 bp one-way):
 
@@ -143,7 +143,8 @@ Rules that have already caused friction, so they are explicit here:
 5. Do not silently change the meaning of an existing file.  Add a new file and
    a note in this table.
 
-scripts/check_artifacts.py enforces the mechanical parts of this contract and
+`uv run sta4020-check-artifacts` (src/sta4020_project/checks.py) enforces the
+mechanical parts of this contract and
 should be run before any integration commit.
 
 ## 4. Work breakdown
@@ -184,7 +185,8 @@ Remaining work is explanation, not code:
 ### Part 3 - portfolio construction
 
 - Inputs are wired (done): artifacts/part1 and artifacts/part2 by default,
-  overridable per flag, so `make part3` is the one command.  What remains is
+  overridable per flag, so `uv run python part3_portfolio/Part3.py` is the one
+  command.  What remains is
   the real P2_Covariance.csv, which does not exist yet.
 - Add the constraints the report will claim: MAX_WEIGHT cap (for example 5% or
   10%), optional turnover penalty, and a documented choice of RISK_AVERSION.
@@ -251,23 +253,23 @@ because nothing downstream of it can be real until it exists.
 
 - Branches: part1/, part2/, part3/, part4/ ; pull requests into main.
 - Every pull request that touches artifacts/ must show the output of
-  scripts/check_artifacts.py.
+  `uv run sta4020-check-artifacts`.
 - Freeze result sets by tag: part4_evaluation/reports/<tag>/ with the config
   block written into REPORT.md, so a quoted number can always be traced back to
   the exact inputs and cost assumption.
 - Every command in this document is run from the repository root, and every
   path is relative to it: no absolute paths, no per-machine setup, no
-  particular user.  Python 3.11+; `make setup` creates .venv and installs the
-  package, `make check-data` verifies the raw data (which is not in git, see
-  data/README.md).
+  particular user.  The only prerequisite is uv: `uv sync` builds .venv from
+  the committed uv.lock, `uv run sta4020-check-data` verifies the raw data
+  (which is not in git, see data/README.md).
 - The final deliverable is one command per part:
 
 ~~~
-make setup
-make check-data
-make check-artifacts
-make part3                      # reads artifacts/part1 and artifacts/part2
-make evaluate TAG=final COST_BPS=10
+uv sync
+uv run sta4020-check-data
+uv run sta4020-check-artifacts
+uv run python part3_portfolio/Part3.py    # artifacts/part1 + artifacts/part2
+uv run sta4020-evaluate --tag final --cost-bps 10
 ~~~
 
 ## 7. Decision log

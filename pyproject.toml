@@ -14,7 +14,13 @@ dependencies = [
     "matplotlib>=3.8",
 ]
 
-[project.optional-dependencies]
+[project.scripts]
+sta4020-check-data = "sta4020_project.checks:check_data"
+sta4020-check-artifacts = "sta4020_project.checks:check_artifacts"
+sta4020-sample = "sta4020_project.sample_pipeline:main"
+sta4020-evaluate = "sta4020_project.cli:main"
+
+[dependency-groups]
 dev = ["pytest>=8"]
 
 [tool.setuptools]

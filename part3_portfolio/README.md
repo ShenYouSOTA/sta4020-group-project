@@ -23,8 +23,7 @@ The five methods and their objectives are unchanged.
 ## Usage
 
 ~~~bash
-python part3_portfolio/Part3.py                      # real artifacts
-make part3                                           # same thing
+uv run python part3_portfolio/Part3.py               # real artifacts
 python part3_portfolio/Part3.py \
     --expected artifacts/sample/P1_Expected_Returns.csv \
     --covariance artifacts/sample/P2_Covariance.csv \

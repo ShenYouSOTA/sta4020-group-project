@@ -20,11 +20,12 @@ the same absolute path.
 
 Provenance: the Part 1 delivery (the original zip is kept in _incoming/, also
 not committed).  Nothing in this directory is modified by this project; if a
-file is ever cleaned or converted, write the transform into scripts/ so the
+file is ever cleaned or converted, write the transform into
+src/sta4020_project/ so the
 step is reproducible.
 
 Check the layout with:
 
 ~~~bash
-make check-data
+uv run sta4020-check-data
 ~~~
