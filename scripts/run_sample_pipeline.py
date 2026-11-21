@@ -40,6 +40,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--tag", type=str, default="sample")
     arguments = parser.parse_args(argv)
 
+    risk_free_path = PROJECT / "data" / "risk_free.csv"
+    if not risk_free_path.exists():
+        print(f"warning: {risk_free_path.name} not found under data/, "
+              f"so Sharpe ratios assume a zero risk-free rate")
+        risk_free_path = None
+
     with tempfile.TemporaryDirectory(prefix="sta4020-sample-") as temporary:
         workdir = Path(temporary)
         weights = run_part3(workdir)
@@ -48,7 +54,7 @@ def main(argv: list[str] | None = None) -> int:
             PROJECT / "artifacts" / "sample" / "P1_Expected_Returns.csv",
             PROJECT / "artifacts" / "sample" / "Actual_Returns.csv",
             PROJECT / "part4_evaluation" / "reports" / arguments.tag,
-            risk_free_path=PROJECT / "data" / "risk_free.csv",
+            risk_free_path=risk_free_path,
             cost_bps=arguments.cost_bps,
             cost_levels=(0.0, 10.0, 30.0, 50.0),
             weights_label="scratch run of part3_portfolio/Part3.py on artifacts/sample "
