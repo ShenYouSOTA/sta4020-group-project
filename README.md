@@ -116,6 +116,10 @@ the others.
 
 ## Getting a working copy
 
+The repository is private: a collaborator needs an invite from the owner
+before cloning, and then clones with their own credentials.  Nothing else in
+the process is user specific.
+
 ~~~bash
 git clone https://github.com/ShenYouSOTA/sta4020-group-project.git
 cd sta4020-group-project
