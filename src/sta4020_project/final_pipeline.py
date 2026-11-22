@@ -17,7 +17,7 @@ import pandas as pd
 from . import checks, cli, risk, return_forecasts
 from .contracts import Paths, read_weights, read_wide, target_dates
 from .final_diagnostics import (
-    MVO, final_attribution, prediction_comparison, risk_comparison, table,
+    MVO, final_attribution, high_coverage_portfolios, prediction_comparison, risk_comparison, table,
 )
 
 COST_BPS = 10
@@ -49,19 +49,29 @@ def run_final(root, paths, tag, descriptors_path):
     report = root / "part4_evaluation/reports" / tag
     experiments = report / "experiments"
     output = report / "tables"
-    output.mkdir(parents=True, exist_ok=True)
+    for directory in (forecast_dir, risk_dir, allocation_dir, report):
+        if directory.exists():
+            raise FileExistsError(f"tag {tag} is already in use at {directory}; choose a fresh --tag")
+    output.mkdir(parents=True)
     logs = report / "logs"
     logs.mkdir(exist_ok=True)
     expected, actual = read_wide(paths.expected_returns), read_wide(paths.actual_returns)
     targets = target_dates(expected.index, actual.index)
     if len(expected.columns) != 50 or len(targets) < 60:
         raise ValueError("the final study requires the fixed 50-stock pool and at least 60 months")
+    origins = expected.index.to_period("M")
+    if (not origins.equals(pd.period_range(origins[0], origins[-1], freq="M"))
+            or not pd.DatetimeIndex(targets).to_period("M").equals(origins + 1)):
+        raise ValueError("the final study requires consecutive origins and exact next-month outcomes")
     commands = []
 
+    def recorded_descriptor_args(descriptors):
+        return ["--descriptors", str(descriptors)] if descriptors_path is not None else []
+
     def build_risk(method, destination, descriptors):
-        args = ["--method", method, "--output", str(destination), "--descriptors", str(descriptors)]
-        commands.append(["sta4020-build-risk", *args])
-        risk.main(args)
+        args = ["--method", method, "--output", str(destination)]
+        commands.append(["sta4020-build-risk", *args, *recorded_descriptor_args(descriptors)])
+        risk.main([*args, "--descriptors", str(descriptors)])
         return destination
 
     def allocate(name, forecast, covariance, *, aversion=5, cap_prior=False, final=False,
@@ -98,9 +108,10 @@ def run_final(root, paths, tag, descriptors_path):
     with descriptor_path(data, descriptors_path) as descriptors:
         broad = build_risk("broad-factor", risk_dir / "P2_Covariance.csv", descriptors)
         _, b_fm = allocate("risk-b", paths.expected_returns, broad)
-        args = ["--output-dir", str(forecast_dir), "--descriptors", str(descriptors)]
-        commands.append(["python", "-m", "sta4020_project.return_forecasts", *args])
-        return_forecasts.main(args)
+        args = ["--output-dir", str(forecast_dir)]
+        commands.append(["python", "-m", "sta4020_project.return_forecasts",
+                         *args, *recorded_descriptor_args(descriptors)])
+        return_forecasts.main([*args, "--descriptors", str(descriptors)])
         risk_runs = {"B": (broad, b_fm)}
         for label, method in (("A", "factor"), ("Sample", "sample"), ("Ledoit–Wolf", "ledoit-wolf")):
             cov = build_risk(method, risk_dir / f"{method}.csv", descriptors)
@@ -120,6 +131,7 @@ def run_final(root, paths, tag, descriptors_path):
         and sharpes["extended"] >= sharpes["fm"]
     ) else "fm"
     selection["selected"] = selected
+    selection["high_coverage_years"] = high_coverage_portfolios(forecast_reports, data, output)
     (report / "model_selection.json").write_text(json.dumps(selection, indent=2) + "\n")
     portfolio_tables = []
     for name, evaluation in forecast_reports.items():
@@ -187,7 +199,9 @@ def run_final(root, paths, tag, descriptors_path):
         "realization": [str(targets.iloc[0].date()), str(targets.iloc[-1].date())],
         "months": len(targets), "assets": len(expected.columns), "strategies": allocations["Model"].nunique(),
         "cost_bps_per_side": COST_BPS, "target_cap": MAX_WEIGHT, "selected_forecast": selected,
-        "reproduce": "uv run --locked --extra risk --extra final python -m sta4020_project.final_pipeline",
+        "reproduce": ("uv run --locked --extra risk --extra final python -m "
+                      "sta4020_project.final_pipeline --tag " + shlex.quote(tag)),
+        "command_note": "Run subcommands in the locked risk and final uv environment from the repository root.",
         "commands": [shlex.join(relative(arg) if arg.startswith(str(root) + "/") else arg
                                 for arg in command) for command in commands],
     }

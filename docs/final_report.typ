@@ -17,7 +17,7 @@
 
 #label[STA4020 · STATISTICAL MODELING IN FINANCIAL MARKETS · FALL 2026]
 #v(13pt)
-#text(27pt, weight: "bold")[Forecasting and allocating across 50 A-shares]
+#text(26pt, weight: "bold")[Forecasting and allocating #linebreak() across 50 A-shares]
 #v(5pt)
 #text(13pt, fill: rgb("#526471"))[Monthly out-of-sample evidence, January 2015 to August 2024]
 #v(16pt)
@@ -97,6 +97,11 @@ with ties included. The extended model also reduced MVO Sharpe from
 #score(selection.fm_mvo_sharpe) to #score(selection.extended_mvo_sharpe).
 The adoption rule required a positive interval, a positive high-coverage
 gain and at least the original Sharpe. We retained the 11-candidate forecast.
+In the higher-coverage realization years
+#selection.high_coverage_years.map(str).join(", "), the conditional MVO Sharpe
+was #score(records("high_coverage_portfolios").find(row => row.forecast == "fm" and row.model == mvo).sharpe_ratio)
+for FM and #score(records("high_coverage_portfolios").find(row => row.forecast == "extended" and row.model == mvo).sharpe_ratio)
+for the extension. The sensitivity retains each strategy's original path.
 The negative IC of historical means helps explain their weaker use as a
 cross-sectional allocation signal. The reused evaluation period supports a
 controlled comparison and model selection. Independent forward performance
@@ -121,7 +126,9 @@ industry coefficient is constrained to zero.
 In each B formation month, we cap descriptor outliers at five scaled median
 absolute deviations and average available standardized components for composite
 styles. The eight styles represent size, value, momentum, reversal, residual
-volatility, liquidity, quality and leverage. From Shanghai and Shenzhen
+volatility, liquidity, quality and leverage. Size and turnover are logged.
+Short momentum and accruals are sign reversed in the reversal and quality
+styles. From Shanghai and Shenzhen
 stocks with positive capitalization and all eight styles, B selects the
 largest 800 using formation-month information. Formation exposures are
 centered by cap weights and scaled by sample standard deviation in that group.
@@ -170,7 +177,8 @@ fully invested problem on eligible stocks from a uniform feasible start.
 The maximum diversification and risk parity implementations use numerical
 local optimization. The risk matrix is symmetrized and any eigenvalues below
 $10^(-10)$ are floored for optimization. Risk aversion $lambda = 5$ is the
-main monthly mean–variance setting.
+main monthly mean–variance setting. It maximizes
+$w^T mu - (lambda / 2) w^T Sigma w$ in monthly units.
 
 Black–Litterman takes equilibrium excess returns $lambda Sigma w_M$ from a
 uniform eligible prior in the main result. The alternative uses that month's
@@ -189,7 +197,8 @@ flags. A tradable blacklisted asset receives a zero target. A blocked asset
 with existing holdings retains its pre-trade number of shares. Trades scale
 the eligible target weights to the available cash after freezing holdings.
 Fees are paid from that cash budget at 10 bp per side on the actual total
-buy and sell notional, including initial purchases. The subsequent monthly
+buy and sell notional, including initial purchases. Reported turnover counts
+both sides. The subsequent monthly
 return drifts the holdings before the next rebalance. Strategies, 1/N and
 attribution use the same post-trade weights and monthly return alignment.
 
@@ -264,7 +273,11 @@ contributed #pp(mv-gap.signal_annualized) and the forecast error contribution wa
 #pp(mv-gap.incremental_cost_drag). Factor risk accounts for
 #pct(mv-risk.factor_variance_share) of MVO's mean forecast variance. The factor
 and specific volatility components were #pct(mv-risk.factor_vol) and
-#pct(mv-risk.specific_vol). They add in variance units.
+#pct(mv-risk.specific_vol). They add in variance units. Maximum
+diversification disregards expected returns in the objective. Its forecast
+tilts were negative and its realized gross active mean was
+#pp(find(gaps, "model", maxdiv).gross_gap). Risk parity tracked the benchmark
+closely, with annual tracking error of #pct(find(against, "", rp).at("Tracking error")).
 
 *Trading constraints.* MVO carried frozen holdings in
 #mv-exec.MonthsWithFrozenHoldings months, with a maximum combined frozen
@@ -295,8 +308,10 @@ depends on these choices.
 The locked pipeline reproduces the results from the trusted course inputs.
 Input SHA-256 hashes, the calendar, commands and selected model are recorded
 in the final manifest. The single market industry limits sector attribution.
-The vendor's handling of fundamental restatements is undocumented and a
-one-month lag only addresses release timing as reflected in the files.
+Vendor book values and reported profits changed much more frequently in
+April, August and October, consistent with announcement timing. A one-month
+lag respects the recorded release months. The handling of later restatements
+remains undocumented.
 A uses a short factor history, while B uses a larger capitalization-weighted
 reference group that may represent risk imperfectly in the fixed pool.
 The results describe the 2015–2024 holdout and its execution assumptions.

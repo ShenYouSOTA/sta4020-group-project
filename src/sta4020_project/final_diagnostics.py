@@ -6,6 +6,7 @@ from scipy.stats import chi2
 
 from .cli import BENCHMARK, monthly_risk_free
 from .contracts import read_covariance_panel, read_wide, target_dates
+from .metrics import summary as performance_summary
 from .stats import circular_block_bootstrap_mean, hac_regression, newey_west_tstat
 from .styles import STYLES
 from .tradability import DELISTED_ASSET, DELISTED_FROM, load_eligibility
@@ -56,6 +57,26 @@ def prediction_comparison(expected_dir, actual, data, origins, output):
     return selection
 
 
+def high_coverage_portfolios(reports, data, output):
+    """Evaluate the existing weight paths in years with median coverage or better."""
+    coverage = pd.read_csv(output / "monthly_ic.csv", index_col=0, parse_dates=True)
+    coverage.index = coverage.index + pd.offsets.MonthEnd()
+    annual = coverage["descriptor_coverage"].groupby(coverage.index.year).mean()
+    chosen = annual >= annual.median()
+    annual.to_frame().assign(selected=chosen).to_csv(output / "annual_descriptor_coverage.csv")
+    months = coverage.index[coverage.index.year.isin(annual.index[chosen])]
+    risk_free = monthly_risk_free(data / "risk_free.csv", months)
+    rows = []
+    for forecast, report in reports.items():
+        returns = table(report, "oos_returns")
+        returns.index = pd.DatetimeIndex(returns.index)
+        for model, series in returns.loc[months].items():
+            rows.append({"forecast": forecast, "model": model,
+                         **performance_summary(series, risk_free=risk_free)})
+    pd.DataFrame(rows).to_csv(output / "high_coverage_portfolios.csv", index=False)
+    return [int(year) for year in annual.index[chosen]]
+
+
 def executed(report, model, origins, assets):
     weights = read_wide(report / "tables" / f"executed_{model.replace('/', '_')}.csv")
     if not weights.index.equals(origins) or set(weights.columns) != set(assets):
@@ -104,7 +125,7 @@ def risk_comparison(risk_runs, final_report, expected, actual, data, output):
         diagonal = np.diagonal(covariance, axis1=1, axis2=2).copy()
         observations = outcomes.copy()
         if DELISTED_ASSET in assets:
-            invalid = np.asarray(mapping >= DELISTED_FROM)
+            invalid = np.asarray(origins >= DELISTED_FROM)
             diagonal[invalid, assets.index(DELISTED_ASSET)] = np.nan
             observations[invalid, assets.index(DELISTED_ASSET)] = np.nan
         diagnostics.append({

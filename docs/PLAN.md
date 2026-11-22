@@ -189,7 +189,7 @@ data -> Part 1 artifacts -> Part 2 covariance -> Part 3 weights -> Part 4 report
 
 | # | Risk | Impact | Mitigation |
 | --- | --- | --- | --- |
-| R1 | The broad cross-sectional risk model is pending. | Early history is short. | Run implementation A and report covariance comparisons on the same calendar. |
+| R1 | A has a short early history and B has a wider capitalization reference. | Covariance bias can vary with the regime and reference. | Compare both with sample and Ledoit–Wolf on the same calendar. |
 | R2 | No industry classification in the data. | The Barra-style model loses its industry block; the comparison to the literature weakens. | Decide the proxy explicitly, report it as a limitation, and lean on the style-factor-only specification. |
 | R3 | The smoke-test fixture has 24 months. | Any quoted number would be wrong and below the 60-month requirement. | Treated as a fixture. The report only quotes reports/ generated from artifacts/part1 and artifacts/part2. |
 | R4 | Universe drift between parts (50 in Part 1, 20 in the mock, N in Part 2). | Silent mismatched assets, wrong weights. | P1_Candidate_Universe.csv is the master list; check_artifacts.py enforces the intersection rule. |
@@ -214,15 +214,11 @@ data -> Part 1 artifacts -> Part 2 covariance -> Part 3 weights -> Part 4 report
   particular user.  The only prerequisite is uv: `uv sync` builds .venv from
   the committed uv.lock, `uv run sta4020-check-data` verifies the raw data
   (which is not in git, see data/README.md).
-- The final deliverable is one command per part:
+- Run the locked final pipeline with a new tag. The manifest records each Part command.
 
-~~~
-uv sync
+~~~bash
 uv run sta4020-check-data
-uv run --extra risk sta4020-build-risk --method factor
-uv run sta4020-check-artifacts
-uv run python part3_portfolio/Part3.py    # artifacts/part1 + artifacts/part2
-uv run sta4020-evaluate --tag final --cost-bps 10
+uv run --locked --extra risk --extra final python -m sta4020_project.final_pipeline
 ~~~
 
 ## 7. Decision log

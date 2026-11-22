@@ -57,6 +57,8 @@ typst compile --root . docs/final_report.typ part4_evaluation/reports/final/Fina
 typst compile --root . docs/final_slides.typ part4_evaluation/reports/final/Final_Slides.pdf
 ~~~
 
+重跑时另选标签，例如 `--tag final-recheck`。编译 Typst 时传入 `--input tag=final-recheck`，并写到同名报告目录。
+
 模型选择、输入校验和、实验命令与结果表见 `part4_evaluation/reports/final/`。对照配置与成交规则见[期末实验设计](docs/FINAL_EXPERIMENT_DESIGN.md)。
 
 ## 原始数据

@@ -16,23 +16,23 @@
 
 #small[STA4020 · FINAL PROJECT · FALL 2026]
 #v(0.76in)
-#text(49pt, weight: "bold", fill: navy)[Forecasting and allocating across 50 A-shares]
+#text(49pt, weight: "bold", fill: navy)[Forecasting and allocating #linebreak() across 50 A-shares]
 #v(0.22in)
 Monthly rebalancing from January 2015 to August 2024
 
 #v(0.53in)
 #grid(columns: (1fr, 1fr, 1fr), gutter: 22pt,
-  [*#manifest.months*  #small[Realized months]],
-  [*#pct(perf.at("Annualized return"))*  #small[Mean–variance net CAGR]],
-  [*#pct(ew.at("Annualized return"))*  #small[Eligible 1/N net CAGR]],
+  [*#manifest.months* #linebreak() #small[Realized months]],
+  [*#pct(perf.at("Annualized return"))* #linebreak() #small[Mean–variance net CAGR]],
+  [*#pct(ew.at("Annualized return"))* #linebreak() #small[Eligible 1/N net CAGR]],
 )
 
 #pagebreak()
 #slide-title[One stock pool across all experiments]
 #grid(columns: (1fr, 1fr, 1fr), gutter: 25pt,
-  [*Form the return signal*    Penultimate trading close. Train on 72 completed labels and score the fixed pool.],
-  [*Update risk and rebalance*    At the month-end close, update risk from data realized by that close and target eligible names.],
-  [*Measure the next month*    Carry frozen positions and charge trading fees before booking subsequent total returns.],
+  [*Form the return signal* #linebreak() Penultimate trading close. Train on 72 completed labels and score the fixed pool.],
+  [*Update risk and rebalance* #linebreak() At the month-end close, update risk from data realized by that close and target eligible names.],
+  [*Measure the next month* #linebreak() Carry frozen positions and charge trading fees before booking subsequent total returns.],
 )
 #v(22pt)
 The original FM selected the 50 names on December 30, 2014. The first portfolio
@@ -82,8 +82,8 @@ formed at the next close. All comparisons use the same roster and calendar.
 #pagebreak()
 #slide-title[Mean–variance led on net return and Sharpe]
 #grid(columns: (1fr, 1.14fr), gutter: 30pt, align: horizon,
-  grid-table(("Strategy", "CAGR", "Vol.", "Sharpe", "Max DD"),
-    (2.05fr, 1fr, .9fr, 1fr, 1fr), performance-rows),
+  text(19pt, grid-table(("Strategy", "CAGR", "Vol.", "Sharpe", "Max DD"),
+    (2.15fr, 1fr, .95fr, 1.1fr, 1.05fr), performance-rows)),
   image(final-dir + "figures/wealth.png", width: 100%),
 )
 #v(18pt)
@@ -97,10 +97,10 @@ to #pp(gap.annual_net_gap_ci_high) using a paired block bootstrap.
 #slide-title[Forecast tilts helped and execution ate into the gain]
 #let risk-split = find(records("risk_decomposition"), "model", mvo)
 #grid(columns: (1fr, 1fr), gutter: 33pt,
- [*Return attribution*   MVO's forecast tilt contributed #pp(gap.signal_annualized) per year.
+ [*Return attribution* #linebreak() MVO's forecast tilt contributed #pp(gap.signal_annualized) per year.
   Forecast errors contributed #pp(gap.timing_annualized). Additional trading cost
   reduced the active mean by #pp(gap.incremental_cost_drag).],
- [*Risk attribution*   Common factors account for #pct(risk-split.factor_variance_share) of predicted MVO variance.
+ [*Risk attribution* #linebreak() Common factors account for #pct(risk-split.factor_variance_share) of predicted MVO variance.
   Negative liquidity and residual-volatility loadings had the largest positive fitted contributions.],
 )
 #v(27pt)

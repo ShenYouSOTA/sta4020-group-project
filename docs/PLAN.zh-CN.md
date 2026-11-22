@@ -144,15 +144,11 @@ data -> Part 1 产物 -> Part 2 协方差 -> Part 3 权重 -> Part 4 报告
 - 每个涉及 artifacts/ 的拉取请求都必须附上 `uv run sta4020-check-artifacts` 的输出。
 - 用标签冻结结果集：`part4_evaluation/reports/<tag>/`，并把配置块写入 REPORT.md，确保每个被引用的数值都能追溯到确切的输入和成本假设。
 - 本文中所有命令均在仓库根目录运行，所有路径均相对于仓库根目录：不用绝对路径，不需要针对单台机器设置，也不依赖特定用户。唯一需预先安装的是 uv：`uv sync` 依据已提交的 uv.lock 创建 .venv；`uv run sta4020-check-data` 校验原始数据（原始数据未纳入 git，见[数据说明](../data/README.zh-CN.md)）。仓库概况见[项目说明](../README.zh-CN.md)。
-- 最终交付按每一部分一条命令执行：
+- 使用新的标签运行锁定的期末流程。运行清单记录各部分的命令。
 
-~~~
-uv sync
+~~~bash
 uv run sta4020-check-data
-uv run --extra risk sta4020-build-risk --method factor
-uv run sta4020-check-artifacts
-uv run python part3_portfolio/Part3.py    # artifacts/part1 + artifacts/part2
-uv run sta4020-evaluate --tag final --cost-bps 10
+uv run --locked --extra risk --extra final python -m sta4020_project.final_pipeline
 ~~~
 
 ## 7. 决策记录

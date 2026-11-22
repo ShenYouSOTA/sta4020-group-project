@@ -14,7 +14,10 @@ original 50-stock pool for all runs.
 Promote the extension only if its paired monthly Rank IC gain has a positive
 six-month block-bootstrap 95% interval, its mean IC gain is positive in the
 months at or above median broad descriptor coverage (including ties), and its net mean-variance Sharpe at 10 bp is
-at least the existing FM Sharpe. Break ties in favor of the original FM.
+at least the existing FM Sharpe. Break ties in favor of the original FM. Also report conditional portfolio
+metrics in realization years whose mean eligible-universe coverage is at or
+above the annual median. Keep the original training and execution paths so
+the year restriction changes only the reported evaluation months.
 
 For Part 2 B select up to 800 largest positive-cap names with observed
 formation-month styles after composite aggregation. Select by formation-month

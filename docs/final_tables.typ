@@ -1,4 +1,4 @@
-#let final-dir = "../part4_evaluation/reports/final/"
+#let final-dir = "../part4_evaluation/reports/" + sys.inputs.at("tag", default: "final") + "/"
 #let tables = final-dir + "tables/"
 #let selection = json(final-dir + "model_selection.json")
 #let manifest = json(final-dir + "manifest.json")

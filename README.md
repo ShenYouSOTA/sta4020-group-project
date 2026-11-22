@@ -85,6 +85,9 @@ typst compile --root . docs/final_report.typ part4_evaluation/reports/final/Fina
 typst compile --root . docs/final_slides.typ part4_evaluation/reports/final/Final_Slides.pdf
 ~~~
 
+Reruns take a fresh tag, such as `--tag final-recheck`. Compile either Typst
+source with `--input tag=final-recheck` and write to that tag’s report directory.
+
 The model selection, input hashes, experiment commands and output tables are in
 `part4_evaluation/reports/final/`. See the [experiment design](docs/FINAL_EXPERIMENT_DESIGN.md)
 for the comparison and execution rules.
