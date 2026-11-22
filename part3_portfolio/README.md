@@ -1,26 +1,15 @@
-# Part 3 - portfolio construction
+# Part 3 - Portfolio Construction
 
 English | [简体中文](README.zh-CN.md)
 
-Part3.py builds five long-only portfolios per rebalancing month from the forecast
-panel (Part 1) and the covariance panel (Part 2), and writes the weights that
-Part 4 evaluates.
+`Part3.py` builds five long-only portfolios per rebalancing month from Part 1 expected returns and Part 2 covariances, writing weights for Part 4 evaluation.
 
-## Changed from the delivered version
+## Changes from Delivered Version
 
-- Paths are arguments with repository-relative defaults, not file names read
-  from the working directory. The script therefore behaves the same from any
-  directory and on any machine.
-- The optimiser settings are arguments instead of module-level globals, so a
-  sensitivity run does not need a code edit.
-- It no longer writes Performance_Summary.csv: those numbers ignored
-  transaction costs and never compared against 1/N, so a table with the four
-  required metrics exists only in the Part 4 report. The console summary is a
-  sanity print, not a result.
-- Missing inputs are reported by name instead of raising a bare file error, and
-  an incomplete covariance matrix names the offending asset and date.
-
-The five methods and their objectives are unchanged.
+- CLI arguments use repository-relative defaults instead of working-directory filenames or module globals.
+- Removed `Performance_Summary.csv`; formal metrics, transaction costs, and the 1/N benchmark live in Part 4.
+- Validates missing inputs and incomplete covariance blocks with explicit asset/date diagnostics.
+- Five portfolio objectives remain unchanged.
 
 ## Usage
 
@@ -33,24 +22,17 @@ uv run python part3_portfolio/Part3.py \
     --output-dir /tmp/part3                          # mock artifacts
 ~~~
 
-Defaults: expected returns from artifacts/part1/P1_Expected_Returns.csv (the
-current FM forecast, also used by Part 4), covariance from
-artifacts/part2/P2_Covariance.csv, realised returns from
-artifacts/part1/Actual_Returns.csv, outputs to artifacts/part3/.
+Defaults: `artifacts/part1/P1_Expected_Returns.csv`, `artifacts/part2/P2_Covariance.csv`, `artifacts/part1/Actual_Returns.csv`, output to `artifacts/part3/`.
 
-The main forecast applies the vendor blacklist and untradable flags at each
-month's last trading close. For a custom forecast, pass `--tradability-data`
-to both Part 3 and Part 4. Use `--max-weight 0.10` to reproduce the interim
-single-asset weight cap.
+The main forecast applies month-end vendor blacklist and untradable flags; pass `--tradability-data` to both Part 3 and Part 4 for custom forecasts. Use `--max-weight 0.10` for the 10% single-name cap.
 
 ## Outputs
 
 | File | Columns | Consumer |
 | --- | --- | --- |
-| Portfolio_Weights.csv | Date, Model, Asset, Weight | Part 4 |
-| OOS_Portfolio_Returns.csv | Date, Model, Portfolio_Return | reconciliation only |
-| Forecast_Portfolio_Metrics.csv | Date, Model, Expected_Return, Expected_Volatility | forecast diagnostics |
-| Tradability_Diagnostics.csv | Date, Excluded_Assets | produced when vendor flags are applied |
+| `Portfolio_Weights.csv` | Date, Model, Asset, Weight | Part 4 |
+| `OOS_Portfolio_Returns.csv` | Date, Model, Portfolio_Return | reconciliation only |
+| `Forecast_Portfolio_Metrics.csv` | Date, Model, Expected_Return, Expected_Volatility | forecast diagnostics |
+| `Tradability_Diagnostics.csv` | Date, Excluded_Assets | generated when vendor flags are active |
 
-Weights are long only and sum to one per model per date. Costs, the 1/N
-benchmark and all statistical tests belong to Part 4.
+Weights are long-only and sum to 1 per `(Date, Model)`. Part 4 handles costs, 1/N, and statistical tests.

@@ -1,193 +1,178 @@
-# 新增描述变量数据（data/addition）评估与接入方案
+# 新增描述变量数据（`data/addition`）评估与接入方案
 
 [English](ADDITION_DATA_ASSESSMENT.md) | 简体中文
 
-评估对象：`group-project/data/addition/descriptors.zip`（2026-11-21 放入，609 MB，单成员 `descriptors.pkl`，解压后 2,778,987,650 字节 ≈ 2.59 GiB）。
-评估目的：判断这批数据能否、以及如何科学地接入本项目四个部分，作为数据来源。
-版本：2026-11-22 评审后第二版，修改内容见文末修订记录。
+评估对象：`group-project/data/addition/descriptors.zip`（609 MB，含 `descriptors.pkl`，解压后 2,778,987,650 字节 ≈ 2.59 GiB）。
 
 ## 0. 结论
 
-1. **数据可用，且与现有面板同源。** 市值字段与 `data/mcap.pkl` 逐格相同（9575 组配对，比值中位数与 5%/95% 分位均为 1.0000，对数相关 1.00000），说明它不是口径不同的第三方数据源，而是同一套行情/财务管线的扩展。
-2. **时点性（PIT）风险低。** 基本面字段按公告期更新（4 月、8 月、10 月为变化高峰，1/6/12 月 ≈0）；价格类字段的月份标签与 `data/monthly_returns.pkl` 同月对齐（相关 0.9488，滞后一月相关 -0.0001）。供应商是否把重述后的财报回填到历史月份，无法用这批数据检验。
-3. **最大价值在 Part 2。** 风险模型至今只在合成数据上测过（`part2_risk_model/README.md`："real-data integration and empirical calibration remain pending"），而这批数据正好提供它需要的风格暴露，包括价格数据给不出的价值、质量和杠杆。Part 2 通了，Part 3 才有真实协方差，Part 4 才有风险分解。
-4. **Part 2 需要首个预测日之前的历史，而这 50 只股票的历史很短。** `forecast_risk` 会把面板截断到 `as_of`，所以 2014-12-31 这个预测日只能用截至当天的数据。50 只股票收益与市值同时完整、且不间断延续到 2014-12 的最长区间从 2012-10 开始（27 个月）；2010-01 起收益完整的只有 15 只。**决定（2026-11-22）：采用方案 A**——50 只股票的平衡面板从 2013-01 开始，扩展窗口估计，首个预测日有 24 个月历史。宽截面估计（方案 B）是期末报告的计划升级，见 §4.1。
-5. **Part 1 只能"有约束地"扩展，不能"数据驱动地"筛选。** 在现有 11 个候选之外预先登记至多 15 个有文献依据的新候选，所有描述变量滞后一个月使用（§4.2），沿用现有 72 月滚动窗、Rank IC 与 BY 流程。
-6. **行业分类依旧缺失。** 213 个字段里没有任何行业标签，PLAN 中的风险 R2 不变：行业块仍退化为单一市场因子。不用聚类"造"行业。
-7. **`300330.SZ` 在样本期内退市。** 2023-04 收益 -0.5701，2023-06 起月收益恒为 0，`data/mcap.pkl` 自 2023-06 起为 NaN。协方差里保留它（全程 N = 50），但自 2023-05 起权重必须为 0；把它的零收益当作真实收益交给优化器，会让它看起来毫无风险。
-8. **缺口可控且已量化。** 在 50 只 × 116 月的预测日历上：A 档 163 个、B 档 31 个、C 档 10 个、D 档 9 个。推荐的风格输入里有三个不是 A 档（`idios_vol_ff3_21`、`turnover_252` 为 B 档，`dividendyield2` 为 C 档），处理见 §4.1。
-9. **不要把它放进仓库。** `.gitignore` 已忽略 `data/*`；提交派生面板和重建脚本，而不是 2.59 GiB 的 pickle。
+1. **与现有面板同源。** `mktcap` 与 `data/mcap.pkl` 逐格一致（9,575 组配对，比值中位数及 5%/95% 分位均为 1.0000，对数相关 1.00000）。
+2. **基本面按公告期更新。** 基本面字段集中于财报公告月更新（4/8/10 月高峰，1/6/12 月 ≈ 0）；价格字段与 `data/monthly_returns.pkl` 同月对齐（同月相关 0.9488，滞后一月 -0.0001）。供应商重述回填口径未文档化。
+3. **主要收益在 Part 2。** 补充纯价格数据缺失的价值、质量与杠杆风格暴露。
+4. **Part 2 样本前窗口。** `forecast_risk` 截断至 `as_of`，故 2014-12-31 仅用此前数据。50 只股票最长不间断平衡区间始于 2012-10（27 个月）；2010-01 起完整者仅 15 只。**方案 A** 采用 2013-01 起 50 只平衡面板扩展窗口（首期 24 个月）；**方案 B** 自 2005 年起在宽截面估计因子收益（§4.1）。
+5. **Part 1 约束扩展。** 在现有 11 个特征外预先登记至多 15 个文献先验候选，全部滞后一月（§4.2），沿用 72 月滚动窗、Rank IC 与 BY 流程。
+6. **无行业分类。** 213 个字段均不含行业代码，行业块退化为单一市场截距（`PLAN.zh-CN.md` 风险 R2）。
+7. **退市股处理（`300330.SZ`）。** 2023-04 收益 -0.5701，2023-05 为 +0.0515，2023-06 起恒为 0（`data/mcap.pkl` 自 2023-06 起为 NaN）。协方差保持 `N = 50`，组合权重自 2023-05 起置 0。
+8. **覆盖分级（50 只 × 116 月）。** A 档 163 个、B 档 31 个、C 档 10 个、D 档 9 个。非 A 档风格输入（B 档 `idios_vol_ff3_21`、`turnover_252`；C 档 `dividendyield2`）按 §4.1 规则处理。
+9. **不纳入 git。** `.gitignore` 已忽略 `data/*`，仅提交派生面板与重建脚本。
 
 ## 1. 数据形态
 
-| 项 | 事实 |
+| 项 | 说明 |
 | --- | --- |
-| 容器 | ZIP，压缩方法 9（Deflate64）。Python `zipfile` 抛 `NotImplementedError`，bsdtar 抛 `Unsupported ZIP compression method (9: deflation-64-bit)`；Info-ZIP `unzip` 与 7z 可解。 |
-| 解压后体积 | 2,778,987,650 字节；`pd.read_pickle` 峰值 RSS 约 2.89 GB。必须整份载入，无法分块流式读取。 |
-| 结构 | `collections.OrderedDict`，213 个键；每个值是 `pandas.Series`（float64），MultiIndex 名为 `('date','asset')`。 |
-| 股票 | 6128 个，代码格式与项目一致（`000001.SZ` / `600000.SH`）。 |
-| 时间 | 321 个月末**交易日**，1999-12-30 至 2026-08-31（如 2000-01-28、2014-12-31、2015-01-30）。 |
-| 字段族 | 动量/波动（`momentum_21`、`momentum_academic_252_21`、`long_term_reversal_756`、`total_vol_21/63`、`idios_vol_ff3_21`、`market_beta_252`、`co_skewness_252`、`max_plus_21`、`illiq_252`、`turnover_252`、`zero_return_ratio_252`、`price_delay_one_252` 等）；规模与价值（`mktcap`、`total_mv`、`[close]`、`book_value_to_total_mktcap_mrq`、`net_profit_to_total_mktcap_ttm`、`dividendyield2`）；质量与盈利（`gross_profit_to_asset_ttm`、`return_on_invested_capital_ttm`、`accrual_to_asset_ttm`、`net_profit_margin_ttm`）；成长（`revenue_yoy_pct_chg`、`net_profit_growth_to_asset` 等）；杠杆/流动性（`total_liab_to_total_asset_mrq`、`current_ratio_mra`）；评分卡（`altman_zscore`、`fscore`、`gscore`、`graham_score`、`buffett_zscore`、`shumway_score`、`dechow_score`）；分析师预期（`west_eps_fy1`、`rating_avg`、`revisions_in_analyst_earnings_forecasts`、`dispersion_in_analyst_earnings_forecasts`）。 |
-| 行业标签 | **不存在**。 |
+| 容器 | ZIP，Deflate64（方法 9）；使用 Info-ZIP `unzip` 或 `7z` 解压（Python `zipfile` 与 `bsdtar` 不支持）。 |
+| 体积 | 解压后 2,778,987,650 字节；`pd.read_pickle` 峰值内存约 2.89 GB。 |
+| 结构 | `collections.OrderedDict`（213 个键），值为 `float64` `pandas.Series`，MultiIndex 为 `('date','asset')`。 |
+| 股票 | 6,128 只（`000001.SZ`、`600000.SH`）。 |
+| 时间 | 321 个月末**交易日**（1999-12-30 至 2026-08-31）。 |
+| 字段族 | 动量/波动（`momentum_21`、`momentum_academic_252_21`、`long_term_reversal_756`、`total_vol_21/63`、`idios_vol_ff3_21`、`market_beta_252`、`illiq_252`、`turnover_252`、`zero_return_ratio_252`）；规模/价值（`mktcap`、`total_mv`、`[close]`、`book_value_to_total_mktcap_mrq`、`net_profit_to_total_mktcap_ttm`、`dividendyield2`）；质量/盈利（`gross_profit_to_asset_ttm`、`return_on_invested_capital_ttm`、`accrual_to_asset_ttm`）；成长（`revenue_yoy_pct_chg`）；杠杆/流动性（`total_liab_to_total_asset_mrq`、`current_ratio_mra`）；评分卡（`altman_zscore`、`fscore`、`graham_score`、`dechow_score`）；分析师（`west_eps_fy1`、`rating_avg`、`revisions_in_analyst_earnings_forecasts`）。 |
+| 行业标签 | 无。 |
 
-### 1.1 与项目预测日历的对齐
+### 1.1 日历对齐
 
-`artifacts/part1/P1_Expected_Returns.csv` 的日期是**日历**月末（2014-12-31 … 2024-07-31，116 行），而描述变量是当月**最后交易日**。按日期等值连接只命中 78/116；把描述变量日期映射为 `Period('M')` 后命中 116/116。**接入层必须以 (月份, 资产) 为键，禁止按日期等值连接。**
+`artifacts/part1/P1_Expected_Returns.csv` 使用**日历**月末（2014-12-31 … 2024-07-31，116 行），描述变量使用当月**最后交易日**。按日期等值连接仅命中 78/116，映射至 `Period('M')` 后命中 116/116。接入层以 `(月份, 资产)` 为键。
 
-## 2. 三项一致性核验（证据）
+## 2. 一致性核验
 
 | 核验 | 方法 | 结果 | 含义 |
 | --- | --- | --- | --- |
-| 市值同源 | `descriptors['mktcap']` 与 `data/mcap.pkl` 按月对齐取交集 | 9575 组配对；比值中位数 1.0000，5%/95% 分位 1.0000，对数相关 1.00000 | 同一管线、同一单位，无需换算；两套数据可互证 |
-| 月份标签 | 用 `[close]` 按月 `pct_change` 得到的收益，与 `data/monthly_returns.pkl` 同月、滞后一月分别比较 | 9525 组配对；同月相关 0.9488，**滞后一月相关 -0.0001**，绝对差中位数 0.00000 | 第 t 月描述变量已包含第 t 月行情，只有在第 t 月最后一个交易日收盘后才可知 |
-| 时点性（PIT） | 2015–2024 每月"该字段发生变化的股票占比"，按月份聚合 | `book_value_mrq`：4 月 0.524、8 月 0.554、10 月 0.508、3 月 0.126、5 月 0.222、1/6/12 月 ≈0.001；`net_profit_q` 同型（0.518 / 0.552 / 0.503）；`total_asset_mra` 集中在 3–5 月（4 月 0.423） | 供应商按**公告期**（年报与一季报 4 月、中报 8 月、三季报 10 月）更新基本面，而非按报表期末 |
+| 同源性 | `descriptors['mktcap']` 与 `data/mcap.pkl` 按月对比 | 9,575 组配对；比值中位数及 p05/p95 = 1.0000；对数相关 1.00000 | 同管线、同单位。 |
+| 月份标签 | `[close]` 月环比与 `data/monthly_returns.pkl`（同月 vs 滞后一月） | 9,525 组配对；同月相关 0.9488，**滞后一月 -0.0001**，绝对差中位数 0.00000 | 第 t 月描述变量包含第 t 月收益，第 t 月末收盘可知。 |
+| 时点性 | 2015–2024 每月发生变化的股票占比 | `book_value_mrq`：4 月 0.524、8 月 0.554、10 月 0.508、3 月 0.126、5 月 0.222、1/6/12 月 ≈ 0.001；`net_profit_q`：0.518 / 0.552 / 0.503 | 基本面按公告期更新，非按报表期末。 |
 
-这一行证据能证明什么、不能证明什么：它说明供应商没有按报表期末打时间戳，"12 月就用上 12 月资产负债表"这种明显的前视不存在；但它无法说明之后的财报重述有没有被回写到更早的月份。这是数据局限（§7），**不能**据此关闭 PLAN 中的风险 R5：R5 讲的是 Part 1 选股和协方差窗口的前视，仍保持打开。
+基本面按公告月更新，规避了报表期末直接前视；重述回填情况未文档化（§7），`PLAN.zh-CN.md` 风险 R5 保持打开。
 
-补充：全部字段在目标面板上没有 `inf`；A、B 档字段在 116 个月里没有任何一个月横截面标准差 ≤ 0。极端值仍需处理：横截面 `|z|` 的 99.9 分位可达 7 左右（如 `total_accrual_to_net_profit_ttm` 6.9、`return_on_invested_capital_ttm` 7.1），数据**未做缩尾**，接入时必须自己缩尾。
+目标面板无 `inf`，A/B 档月度横截面标准差均大于 0；横截面 `|z|` 的 99.9 分位可达 ~7（`total_accrual_to_net_profit_ttm` 6.9、`return_on_invested_capital_ttm` 7.1），接入时须缩尾。
 
 ## 3. 覆盖与缺口
 
 ### 3.1 预测日历内
 
-目标面板：50 只（`artifacts/part1/P1_Candidate_Universe.csv`）× 116 月 = 5800 格。全部 50 只都在描述变量里。
+目标面板：50 只（`artifacts/part1/P1_Candidate_Universe.csv`）× 116 月 = 5,800 格。
 
 | 档位（判据） | 字段数 | 处置 |
 | --- | --- | --- |
-| A：覆盖 ≥95%、无 inf、各月离散度为正 | 163 | 直接使用 |
-| B：覆盖 90–95% | 31 | 横截面中位数填补，并记录填补比例 |
-| C：覆盖 50–90% | 10 | 仅在稳健性检验中使用 |
-| D：覆盖 <50% | 9 | 弃用 |
+| A：覆盖 ≥ 95%、有限值、各月离散度为正 | 163 | 直接使用 |
+| B：覆盖 90–95% | 31 | 横截面中位数填补并记录填补率 |
+| C：覆盖 50–90% | 10 | 仅用于稳健性检验 |
+| D：覆盖 < 50% | 9 | 弃用 |
 
-逐字段明细见 `artifacts/addition/desc_field_coverage.csv`。其中 `first_valid_month` 只在预测日历内计算，所以几乎所有字段都显示 2014-12；`first_valid_month_full` 才是全文件范围的首个有效月份。
+逐字段明细见 `artifacts/addition/desc_field_coverage.csv`（`first_valid_month` 针对预测日历，`first_valid_month_full` 针对全文件）。
 
 三类缺口：
 
-1. **退市**：`300330.SZ` 在 2023-05 … 2024-07 共 15 个月无任何描述变量，这 15 个月每月只有 49/50 只可观测（与最高覆盖率 5785/5800 = 0.997414 吻合）。该股 2023-04 收益 -0.5701、2023-05 收益 +0.0515，2023-06 起连续 15 个月收益恒为 0；`data/mcap.pkl` 保留该列，但自 2023-06 起值为 NaN。
-2. **价格类字段的逐股缺失**：`total_vol_21` 在 50 只里只有 3 只全期无缺失，最差的 `300149.SZ` 缺 24 个月；缺失率按年看，2015 年 13.7%、2016 年 14.5%、2017 年 12.2%、2018 年 4.0%、2019 年后约 1%。缺失与"当月收益为 0"只在 3.9% 的情形重叠，主要不是停牌，而是供应商自身价格历史不足/断档。
-3. **分析师类字段**：日历内覆盖 38%–43%，D 档。它们远早于样本期就有数据（`rating_avg` 自 2004-12、`revisions_in_analyst_earnings_forecasts` 自 2005-03、`west_eps_fy1` 自 2013-01），弃用的理由是覆盖率，而不是起始时间。
+1. **退市：** `300330.SZ` 在 2023-05 … 2024-07 共 15 个月无描述变量（49/50 只可观测，最高覆盖 5,785/5,800 = 0.997414）。
+2. **价格类字段逐股缺失：** `total_vol_21` 仅 3/50 只全期完整（`300149.SZ` 缺 24 个月）；缺失率从 2015 年 13.7%、2016 年 14.5% 降至 2019 年后约 1%，与零收益仅重合 3.9%。
+3. **分析师字段：** 覆盖率 38%–43%（D 档，虽始于 2004–2013 年仍弃用）。
 
-### 3.2 样本前窗口（Part 2 需要）
+### 3.2 样本前窗口（Part 2）
 
-| 截至 2014-12 的窗口 | 收益完整的股票数（/50） |
+| 截至 2014-12 窗口 | 收益完整股票数（/50） |
 | --- | --- |
 | 自 2005-01 | 12 |
 | 自 2010-01 | 15 |
 | 自 2012-01 | 40 |
-| 自 2012-10 | 50（收益与市值同时完整的最长不间断区间，27 个月） |
+| 自 2012-10 | 50（27 个月，最长平衡区间） |
 
-最年轻的股票在 2012 年上市（`300354.SZ` 首个收益在 2012-10）。在样本前窗口 2012-10 … 2014-11（表中的 `presample_coverage`）上，基本面类风格输入完整（1.000），`momentum_21` 0.953、`idios_vol_ff3_21` 0.945、`turnover_252` 与 `market_beta_252` 0.916、`momentum_academic_252_21` 0.892——后者需要 12 个月历史，新上市股票还不具备。213 个字段的 `presample_coverage` 中位数为 0.987。
+最晚上市股（`300354.SZ`）始于 2012-10。在 2012-10 … 2014-11（`presample_coverage`）上：基本面输入 1.000、`momentum_21` 0.953、`idios_vol_ff3_21` 0.945、`turnover_252` 与 `market_beta_252` 0.916、`momentum_academic_252_21` 0.892（213 字段中位数 0.987）。
 
-## 4. 怎么用才科学：三层方案
+## 4. 接入方案
 
-### 4.1 层一（必做）：Part 2 的真实风格暴露
+### 4.1 层一：Part 2 风格暴露
 
-输入契约在 `part2_risk_model/src/risk_model/factor_model.py:11-19`（`RiskPanel`），校验在 `:30-53`，风格标准化在 `:64-69`；入口 `forecast_risk` 把面板截断到 `as_of`（`risk_model.py:21`），并用最后一行暴露做预测。
+`RiskPanel` 契约（`part2_risk_model/src/risk_model/factor_model.py:11-19`，校验 `:30-53`，标准化 `:64-69`）与 `forecast_risk`（`risk_model.py:21`）：
 
-接入层必须满足的约束：
+- 平衡面板、有限值、`T >= 2`、`market_caps > 0`、每只股票属单一非空行业。
+- 包内标准化：市值加权去中心后除以等权横截面标准差（`ddof=1`）。
 
-- 面板必须平衡、无 NaN、`T>=2`；`market_caps` 与 `returns` 同形且严格为正；每只股票每天恰好属于一个行业，且每个行业每天都有代表。
-- 风格**由包内标准化**：先按市值加权均值去中心，再除以等权横截面标准差（ddof=1）；若某月离散度 ≤0 或非有限则直接 `ValueError("raw styles must have positive dispersion")`。
+**标准化规则：** 包内变换对月度正仿射变换 `a_t + b_t·x`（`b_t > 0`）不变，单字段不做外部 z-score：
 
-**标准化规则。** 包内这一步对任何每月仿射变换 `a_t + b_t·x`（`b_t > 0`）都不变，所以外部 z-score 无害但多余：它既不会平移截距，也不会改变约束加权最小二乘的条件数。规则因此是为了清晰，而不是为了数值稳定：
+- **单字段风格：** 传入变换后原始值（按表取对数、缩尾、定方向）。
+- **合成风格：** 各分量先缩尾、月内 z-score 并定方向，再对可用分量等权平均。
+- **缩尾：** 每月截断于 `中位数 ± 5 × 1.4826 × MAD`。
 
-- **单字段风格**：传变换后的原始值（按表取对数、缩尾、定方向），不做外部 z-score。
-- **合成风格**：各分量先缩尾，再在月内 z-score、定方向，然后对可用分量等权平均。分量相加前必须先统一尺度；合成结果交给包时，包仍会重新标准化。
-- **缩尾**：每月在 中位数 ± 5 × 1.4826 × MAD（约 ±5 个稳健标准差）处截断。均值 ± 3σ 的规则所用的标准差本身会被极端值放大。
-
-**风格数 Q = 8，不再增加。** N = 50 时，每月截面回归要估 1 + Q 个参数，Q = 8 剩 41 个自由度；Beta 和成长只进稳健性检验。
+**八个风格（Q = 8）：** `N = 50` 时每月截面回归保留 41 个自由度。
 
 | 风格 | 字段 | 档位 | 处理 |
 | --- | --- | --- | --- |
 | Size | `mktcap` | A | 取对数 |
-| Value | `book_value_to_total_mktcap_mrq`、`net_profit_to_total_mktcap_ttm` | A、A | 合成；`dividendyield2`（C 档，0.817）只用于稳健性变体 |
-| Momentum | `momentum_academic_252_21` | A | 直接用 |
-| Short-term reversal | `momentum_21` | A | 取负号 |
-| Volatility | `idios_vol_ff3_21` | B | 直接用；比 `total_vol_63` 更接近 Barra 的残差波动定义 |
-| Liquidity | `turnover_252` | B | 取对数；`illiq_252` 仅作稳健性替代 |
-| Quality | `return_on_invested_capital_ttm`、`gross_profit_to_asset_ttm`、`accrual_to_asset_ttm` | A、A、A | 合成；应计取负 |
-| Leverage | `total_liab_to_total_asset_mrq` | A | 直接用 |
+| Value | `book_value_to_total_mktcap_mrq`、`net_profit_to_total_mktcap_ttm` | A, A | 合成（`dividendyield2` C 档作稳健性） |
+| Momentum | `momentum_academic_252_21` | A | 直接使用 |
+| Short-term reversal | `momentum_21` | A | 取负 |
+| Volatility | `idios_vol_ff3_21` | B | 直接使用 |
+| Liquidity | `turnover_252` | B | 取对数（`illiq_252` 作稳健性） |
+| Quality | `return_on_invested_capital_ttm`、`gross_profit_to_asset_ttm`、`accrual_to_asset_ttm` | A, A, A | 合成；应计取负 |
+| Leverage | `total_liab_to_total_asset_mrq` | A | 直接使用 |
 
-仅用于稳健性：`market_beta_252`、`revenue_yoy_pct_chg`、Value 中加入 `dividendyield2`、Liquidity 换成 `illiq_252`。
+稳健性候选：`market_beta_252`、`revenue_yoy_pct_chg`、`dividendyield2`、`illiq_252`。
 
-**估计方案：方案 A（2026-11-22 决定）。**
+**方案 A（中期）：** 50 只股票，2013-01 至 2024-07，超额收益（`monthly_returns.pkl` 减 `risk_free.csv`），扩展窗口调用 `forecast_risk(panel, as_of=t)`（首期 24 行 / 23 个因子收益），单一行业，对照样本与 Ledoit–Wolf 协方差。
 
-- 面板包含 50 只股票，月频，**2013-01** 至 2024-07；超额收益 = `data/monthly_returns.pkl` 减去 `data/risk_free.csv` 的月度无风险利率。从 2013-01 而不是 2012-10 开始，是为了跳过最晚上市股票的头几个月；2012-10 起点作为敏感性检验。
-- 对 Part 1 日历中的每个预测日 `t` 调用 `forecast_risk(panel, as_of=t, ...)`，窗口逐月扩展。首个预测日有 24 行历史，即用 23 个月的因子收益估计 9 × 9 因子协方差。早期协方差噪声较大，报告中必须写明。
-- 行业：所有股票同属一个行业（R2）。
-- `300330.SZ`：见下方缺口规则。
-- 在同一窗口上计算普通样本协方差和 Ledoit–Wolf 协方差作为对照（PLAN R1）。
+**方案 B（期末）：** 自 2005 年起在市值前 800 只正市值股票上通过 `fit_factor_model` 估计月度因子收益，再用 `stable.estimate_factor_covariance` 与 `integration.compute_asset_covariance` 结合 50 只残差方差组装协方差。
 
-**方案 B（期末升级，尚未实现）。** 在宽截面上逐月估计因子收益（例如第 t、t+1 月数据都完整的市值前 800 只；两行的 `RiskPanel` 是 `fit_factor_model` 的合法输入），得到 2005 年起的长因子收益序列；再用包内组件（`stable.estimate_factor_covariance`、`integration.compute_asset_covariance`）组装 50 只股票的协方差，特异方差仍用 50 只的残差。这样会绕开 `forecast_risk`，动态与整合步骤需要手工组合。A 与 B 的对比是 Part 2 章节的内容。
+**缺口规则：**
+- 风格逐股缺失：月内横截面中位数填补，按风格/月记录填补率。
+- `300330.SZ` 自 2023-05 起：市值与风格前值填充以保持 `N = 50`；冻结退市前特异方差；通过 `UNTRADABLE` 掩码将组合权重置 0。
 
-**缺口处理（写死，保证可复现）：**
+### 4.2 层二：Part 1 特征扩展
 
-- 风格输入的逐股缺失：月内横截面中位数填补，另存缺失指示矩阵（仅用于诊断，不进回归）；按风格、按月记录填补比例。
-- `300330.SZ` 自 2023-05 起：保留该股，全程 N = 50。市值和风格沿用最后一个观测值，以满足 `market_caps > 0`。退市后的月份不参与它自己的特异方差估计，沿用退市前最后一个估计值，避免它的协方差行向 0 收缩。Part 3 通过 UNTRADABLE 掩码自 2023-05 起把它的权重设为 0，Part 4 报告中写明这一处理。
+1. 在现有 11 个特征外预先登记至多 15 个文献先验候选（价值、盈利、投资、应计、杠杆），BY 检验总数 ≤ 26。
+2. 所有描述变量滞后一月：第 t 月描述变量于第 t 月末收盘可知，而信号在倒数第二个交易日收盘生成（`part1_return_model/logic_readme.md` §1）；不重复加入价量描述变量。
+3. 在全 A 股宽截面训练（首个 72 月窗口 2008-11 至 2014-11），入模前核验覆盖率。
+4. 沿用中心值（0）缺失填补，并报告高覆盖年份敏感性。
 
-### 4.2 层二（建议）：Part 1 的特征扩展
+在 11 个价量特征基础上补充基本面价值、质量与应计维度。
 
-1. **不允许把 213 个字段丢进 IC 筛选。** 按文献先验（价值、盈利能力、投资、应计、杠杆）**预先登记至多 15 个新候选**，加上现有 11 个，BY 校正至多面对 26 个检验。候选清单在运行前写进本文档。
-2. **所有描述变量滞后一个月。** Part 1 在第 t 月倒数第二个交易日收盘后构造特征，在最后一个交易日收盘成交（`part1_return_model/logic_readme.md` §1）。第 t 月描述变量要到最后一个交易日收盘才可知，所以信号日只能用**第 t−1 月**的描述变量。基本面按季更新，滞后一月几乎没有损失。价格类描述变量（`momentum_21`、`total_vol_*`、`idios_vol_*`）不加入：现有 11 个特征已经在正确时点覆盖了价量信息。把整个 Part 1 的信号日改到最后一个交易日等于重做已交付模型，不在计划内。
-3. **训练截面仍是全 A 股，不是 50 只。** 首个 72 月训练窗是 2008-11 至 2014-11。使用某个候选之前，先测它在这一窗口内宽截面上的覆盖率（这 50 只自身在 2008 年的覆盖只有约 28%）。
-4. **缺失特征沿用现有约定**（用中心分数 0 填补），并额外报告一次只用高覆盖年份的敏感性。
+### 4.3 层三：Part 4 风险分解与归因
 
-预期收益：现有 11 个特征全部是价量类，描述变量补上了价值、质量、应计等**基本面维度**，这是课程评分里"经济解释"最容易加分的地方。
+- **风险分解：** 拆分预测方差为因子与特异风险，通过 Mincer–Zarnowitz 回归与 Q(6) 检验对比实现波动。
+- **风格归因：** 将组合月度主动收益对八个风格因子收益回归。
 
-### 4.3 层三（加分，工作量小）：Part 4 的风险分解与归因
+### 4.4 弃用字段
 
-- **风险分解**：用 Part 2 的协方差把组合预测波动拆成因子风险 + 特异风险，并与实际实现的波动对比（Mincer–Zarnowitz 回归、预测误差的 Q 统计量）。
-- **风格归因**：把组合月度收益对 8 个风格因子收益回归，回答"超额收益来自哪一类暴露"，补上"vs 1/N"之外的机制解释。
+- 分析师字段（`west_eps_fy1`、`rating_avg`、`revisions_*`）：D 档（覆盖 < 50%）。
+- `free_cash_flow_yoy_pct_chg`：日历内覆盖 19%，样本前缺失。
+- 聚类构造行业：缺少真实标签验证，保留单一行业退化设定。
+- `graham_score`、`gscore`：C 档（覆盖 55%–70%），仅作稳健性检验。
 
-### 4.4 明确不采纳
+## 5. 验收门槛
 
-- 分析师类字段（`west_eps_fy1`、`rating_avg`、`revisions_*`、`dispersion_*`）：D 档，覆盖不足一半。
-- `free_cash_flow_yoy_pct_chg`：日历内覆盖 19%，样本前窗口内无数据。
-- 用字段聚类"造行业"：没有标签就没有验证标准，维持单一行业退化并写入局限更稳妥。
-- 用 `graham_score`、`gscore` 等评分卡做核心因子：覆盖 55%–70%，C 档，只适合稳健性检验。
+1. 加载器 3 分钟内重建面板并复现 `artifacts/addition/desc_field_coverage.csv`。
+2. 风格面板通过 `RiskPanel` 校验（有限值、`market_caps > 0`、单一行业、每月离散度为正）。
+3. 116 个月内风格两两月度 `|ρ|` 中位数 < 0.7，各风格 VIF < 5。
+4. Part 2 无前视（基准日 `t` 的协方差不受 `t` 之后扰动影响）。
+5. `artifacts/part2/P2_Covariance.csv` 通过 `sta4020-check-artifacts`，逐月正定，前 5 特征值占比 < 95%，对角线与实现个股方差同量级。
+6. Part 1 在相同 116 月 × 50 只池上对比基线（11）与扩展（11 + ≤ 15）的 Rank IC、ICIR 与相对 1/N 的样本外表现。
+7. 报告写明 R2（无行业）、方案 A 早期历史短、`300330.SZ` 处理、缩尾与填补规则及 PIT 证据与局限。
 
-## 5. 验收门槛（做完必须逐条打勾）
-
-1. 加载器能在 3 分钟内从 `descriptors.zip` 重建面板，并复现 `artifacts/addition/desc_field_coverage.csv`。
-2. 风格面板与 `RiskPanel` 契约完全兼容：无 NaN、`market_caps>0`、每只股票一个行业、每月离散度为正——用一个直接调用包内校验函数的测试断言。
-3. 116 个月里，8 个构造后风格两两之间月度 |ρ| 的中位数低于 0.7，且每个风格的 VIF 低于 5。不用"任一月份"阈值：N = 50 时月度相关噪声很大（原始字段 `net_profit_to_total_mktcap_ttm` 与 `return_on_invested_capital_ttm` 单月最高 0.97，均值 0.55）。
-4. Part 2 无前视：预测日 t 的协方差只依赖截至 t 的面板行。用测试扰动 t 之后的行，断言 t 的协方差不变。
-5. 真实数据生成的 `artifacts/part2/P2_Covariance.csv` 通过 `sta4020-check-artifacts`，每个预测日都正定，前 5 个特征值占迹的比例低于 95%，对角线与个股实际方差同一量级。
-6. Part 1 给出"基线（11 个候选）vs 扩展（11 + 至多 15）"在同一 116 个月、同一 50 只池上的 Rank IC、ICIR 及相对 1/N 的 OOS 指标对比；若扩展版没有稳定改进，**保留基线并如实报告**。
-7. 报告里必须出现：R2（无行业）仍是局限；方案 A 早期历史短；`300330.SZ` 的处理方式；缩尾与填补规则；PIT 证据及其局限。
-
-## 6. 工程步骤（对齐里程碑）
+## 6. 里程碑步骤
 
 | 步骤 | 产出 | 预估 |
 | --- | --- | --- |
-| 1. 加载层 | `src/sta4020_project/descriptors.py`：解压到缓存、(月份, 资产) 为键、只载入所需字段的面板构造；测试覆盖 116/116 对齐与 `mktcap` = `mcap.pkl` | 0.5 天 |
-| 2. 风格层 | 按 §4.1 规则构造 8 个风格、缩尾、填补日志、`300330.SZ` 前值填充、超额收益，导出 `artifacts/addition/style_panel.npz`；门槛 2、3 | 1 天 |
-| 3a. 风险模型 A | 扩展窗口逐预测日调用 `forecast_risk`，样本协方差与 Ledoit–Wolf 对照，导出 `artifacts/part2/P2_Covariance.csv` 与诊断；门槛 4、5 | 1 天 |
-| 4. 组合与评估 | Part 3 加入 UNTRADABLE/BLACKLIST 掩码，用新协方差跑五种方法；Part 4 以 `interim` 标签冻结结果 | 0.5 天 |
-| 3b. 风险模型 B | 宽截面因子收益、组装协方差、与 A 对比 | 1 天 |
-| 5. 收益模型扩展 | 预先登记、滞后一月的扩展实验；门槛 6 | 1 天 |
-| 6. Part 4 分解 | 因子/特异风险拆分与风格归因 | 0.5 天 |
-| 7. 文档 | PLAN 风险表与报告局限章节；门槛 7 | 0.5 天 |
+| 1. 加载层 | `src/sta4020_project/descriptors.py` 及对齐/同源测试 | 0.5 天 |
+| 2. 风格层 | 8 风格、缩尾、`300330.SZ` 前值填充 -> `artifacts/addition/style_panel.npz` | 1 天 |
+| 3a. 风险 A | 扩展 `forecast_risk` + 样本/Ledoit–Wolf -> `artifacts/part2/P2_Covariance.csv` | 1 天 |
+| 4. 组合与评估 | Part 3 加掩码 + Part 4 `interim` 标签 | 0.5 天 |
+| 3b. 风险 B | 宽截面因子收益 + A/B 对比 | 1 天 |
+| 5. 收益扩展 | 预登记滞后一月扩展实验 | 1 天 |
+| 6. Part 4 分解 | 因子/特异拆分 + 风格归因 | 0.5 天 |
+| 7. 文档 | 计划风险表与报告局限章节 | 0.5 天 |
 
-步骤 1、2、3a、4 面向 11/23–11/27 的中期窗口；3b、5、6、7 放在 12 月上旬。
+## 7. 局限性
 
-## 7. 风险与局限（直接可抄进报告）
-
-1. **行业缺口**：数据无行业标签，行业块退化为单一市场因子，行业轮动风险被并入市场风险，个股相对风险的估计会偏保守。
-2. **早期历史短（方案 A）**：最初的预测日只依赖约两年、在 50 只股票上估计的因子收益，早期协方差噪声大。方案 B 解决这一问题。
-3. **字段语义由供应商定义**：窗口、复权、财报调整口径未随数据提供文档，只能通过一致性核验间接确认；无法排除重述数据被回填。
-4. **覆盖不均**：价格类字段在 2015–2017 年缺失 12%–15%，早期估计更依赖填补值。
-5. **固定池中有退市股**：`300330.SZ` 于 2023 年退市，自 2023-05 起权重为 0，1/N 基准也必须同样处理。
-6. **数据体量大**：原始包 609 MB、解压 2.59 GiB，压缩方法为 Deflate64（Python 标准库不支持），复现环境必须自带 `unzip` 或 7z。
-7. **单一数据源风险**：市值与基础面板完全一致，说明二者同源；若供应商口径有系统性偏差，两套数据无法互相纠错。
+1. **无行业标签：** 行业轮动并入市场风险。
+2. **早期历史短（方案 A）：** 初期仅约两年 50 股因子收益（由方案 B 改善）。
+3. **重述口径未文档化：** 公告月更新已验证，但是否存在历史重述回填无法排除。
+4. **早期覆盖不均：** 价格字段在 2015–2017 年缺失 12%–15%。
+5. **固定池退市股：** `300330.SZ` 自 2023-05 起在策略与 1/N 中权重均为 0。
+6. **压缩格式：** 609 MB Deflate64 ZIP（解压 2.59 GiB）依赖 `unzip` 或 `7z`。
+7. **单一数据源：** `mktcap` 与 `mcap.pkl` 完全一致，共用同一供应商口径。
 
 ## 附录 A：复现命令
 
 ~~~bash
-# 解压（Python zipfile 与 bsdtar 不支持 Deflate64，必须用 unzip 或 7z）
 unzip -o data/addition/descriptors.zip -d "$HOME/.cache/sta4020/"
 
-# 生成逐字段覆盖分级表（含样本前覆盖）
 .venv/bin/python tools/desc_field_coverage.py \
   --descriptors "$HOME/.cache/sta4020/descriptors.pkl" \
   --universe artifacts/part1/P1_Candidate_Universe.csv \
@@ -195,10 +180,3 @@ unzip -o data/addition/descriptors.zip -d "$HOME/.cache/sta4020/"
   --history-start 2012-10 \
   --out artifacts/addition/desc_field_coverage.csv
 ~~~
-
-## 修订记录
-
-| 日期 | 修改 |
-| --- | --- |
-| 2026-11-22 | 第一版。 |
-| 2026-11-22 | 评审修订：新增样本前分析并选定方案 A（§3.2、§4.1）；`300330.SZ` 由"收益置 0"改为自 2023-05 起权重为 0；Part 1 描述变量滞后一月；更正标准化论证并补充合成风格规则；更正风格输入的档位，核心 Value 风格去掉 `dividendyield2`；不再称 R5 可关闭；更正分析师字段起始时间；替换相关性门槛；明确"≤15"指新增候选；新增无前视门槛。 |

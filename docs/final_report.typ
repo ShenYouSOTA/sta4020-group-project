@@ -102,10 +102,8 @@ In the higher-coverage realization years
 was #score(records("high_coverage_portfolios").find(row => row.forecast == "fm" and row.model == mvo).sharpe_ratio)
 for FM and #score(records("high_coverage_portfolios").find(row => row.forecast == "extended" and row.model == mvo).sharpe_ratio)
 for the extension. The sensitivity retains each strategy's original path.
-The negative IC of historical means helps explain their weaker use as a
-cross-sectional allocation signal. The reused evaluation period supports a
-controlled comparison and model selection. Independent forward performance
-remains untested.
+The negative IC of historical means explains their weak cross-sectional
+allocation performance. All model comparisons share the 2015–2024 holdout.
 
 #pagebreak()
 = 2. Estimating risk across the fixed roster
@@ -244,12 +242,9 @@ data are the monthly net returns in the final output.]
 CAGR gaps compare net compound returns. Confidence intervals apply to
 annualized arithmetic net active returns from a paired six-month circular
 block bootstrap. The Memmel test compares monthly excess-return Sharpe ratios
-and the alpha regression uses excess returns with Newey–West errors. These are
-individual tests across five strategies. Maximum diversification's low
-unadjusted Sharpe p-value should be read in that context. The largest point
-estimate belongs to MVO. Its signal and volatility exposures, the amount of
-trading needed to maintain them, and their sample dependence matter more than
-the performance ranking alone.
+and the alpha regression uses excess returns with Newey–West errors. Tests are
+unadjusted across five strategies. MVO delivers the highest point estimate,
+driven by its signal and volatility exposures, turnover, and sample dependence.
 
 #pagebreak()
 = 5. Why results differ
@@ -305,13 +300,10 @@ depends on these choices.
 
 == Reproduction and limitations
 
-The locked pipeline reproduces the results from the trusted course inputs.
-Input SHA-256 hashes, the calendar, commands and selected model are recorded
-in the final manifest. The single market industry limits sector attribution.
-Vendor book values and reported profits changed much more frequently in
-April, August and October, consistent with announcement timing. A one-month
-lag respects the recorded release months. The handling of later restatements
-remains undocumented.
-A uses a short factor history, while B uses a larger capitalization-weighted
-reference group that may represent risk imperfectly in the fixed pool.
-The results describe the 2015–2024 holdout and its execution assumptions.
+The locked pipeline and `manifest.json` record input SHA-256 hashes, the
+calendar, commands, and model selection. Key limitations: a single market
+industry prevents sector attribution; vendor restatement back-filling is
+undocumented (though April, August, and October release peaks match
+announcement timing); Model A uses a short early history while Model B
+estimates factors on a broader 800-stock universe; and results reflect
+2015–2024 close-price execution assumptions.

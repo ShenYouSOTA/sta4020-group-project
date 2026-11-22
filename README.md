@@ -1,58 +1,30 @@
-# STA4020 Final Project - group repository
+# STA4020 Final Project
 
 English | [简体中文](README.zh-CN.md)
 
-Four-part project: forecast expected returns (Part 1), estimate the risk
-structure (Part 2), build portfolios (Part 3), and evaluate them out of sample
-(Part 4).  Each part is one person's 25% contribution; the final slides and
-report are graded once for the whole group.
+Four-part quantitative equity project: return forecasting (Part 1), risk modeling (Part 2), portfolio construction (Part 3), and out-of-sample evaluation (Part 4). Each part represents 25% individual work; the final slides and report are graded as a group.
 
-Start with [docs/PLAN.md](docs/PLAN.md) - it holds the deadline map, the
-artifact contract that the four parts exchange, the work breakdown and the risk
-list.
+See [docs/PLAN.md](docs/PLAN.md) for deadlines, artifact contracts, work breakdown, and risks. Run all commands from the repository root; all code resolves paths relative to it.
 
-All commands below are run from the repository root, and every path in the code
-is resolved from the repository root, not from the working directory.  Nothing
-depends on where the repository lives or on who runs it.
+## Requirements & Setup
 
-## Requirements
-
-- [uv](https://docs.astral.sh/uv/) - the only tool to install.  uv fetches a
-  suitable Python (3.11 or newer) if the machine has none.
-
-Dependencies are pinned in uv.lock, which is committed: numpy, pandas, scipy
-and matplotlib, plus pytest for development.  The same lock file is what makes
-two people's numbers comparable, so update it deliberately
-(`uv add` / `uv lock`) rather than by hand.
-
-## Setup
+- [uv](https://docs.astral.sh/uv/) (automatically provisions Python ≥ 3.11 and syncs `uv.lock`).
+- Update dependencies via `uv add` or `uv lock`.
 
 ~~~bash
-uv sync
+uv sync    # optional; `uv run` syncs automatically
 ~~~
 
-That creates .venv from uv.lock and installs the project in editable mode, so
-`import sta4020_project` works and the console scripts below are on the
-environment's PATH.  `uv run` keeps the environment in sync on every call, so
-you can skip this step and just run the commands.
-
-## Quick start
+## Quick Start
 
 ~~~bash
-uv run pytest                    # unit tests for the shared code
-uv run sta4020-sample            # end-to-end smoke test on the mock artifacts
-uv run sta4020-check-data        # are the raw data files present?
-uv run sta4020-check-artifacts   # are the CSVs from Parts 1 and 2 well formed?
+uv run pytest                    # unit tests for shared code
+uv run sta4020-sample            # smoke test on 20-asset, 24-month mock panel -> part4_evaluation/reports/sample/REPORT.md
+uv run sta4020-check-data        # verify raw data files
+uv run sta4020-check-artifacts   # validate Part 1 and Part 2 CSV contracts
 ~~~
 
-The smoke test runs the Part 3 script on the mock 20-asset, 24-month panel that
-came inside the Part 3 zip, passes the weights through the Part 4 evaluation,
-and writes part4_evaluation/reports/sample/REPORT.md.  It proves that the
-hand-off works before the real Part 2 and Part 3 outputs exist.
-
-Reproduce the interim run from the delivered Part 1 forecasts and the local
-course data. The factor run requires `unzip` with Deflate64 support and
-temporary disk space for the 2.59 GiB extracted pickle.
+Reproduce the interim run using Part 1 forecasts and course data (factor risk requires `unzip` with Deflate64 support and ~2.6 GiB temp space):
 
 ~~~bash
 uv run --extra risk sta4020-build-risk --method factor
@@ -61,22 +33,13 @@ uv run sta4020-check-artifacts --weights artifacts/part3/run1/Portfolio_Weights.
 uv run sta4020-evaluate --tag run1 --cost-bps 10 --weights artifacts/part3/run1/Portfolio_Weights.csv
 ~~~
 
-For covariance comparisons, rerun the builder with `--method sample` or
-`--method ledoit-wolf` and a distinct `--output`. Pass that file to Part 3
-with `--covariance` and use a separate output directory and report tag.
-The main forecast uses the local month-end vendor flags in both Part 3 and
-Part 4. Use `--tradability-data` on both commands for a custom forecast.
+- **Covariance comparison:** rerun `sta4020-build-risk` with `--method sample` or `--method ledoit-wolf` and a distinct `--output`, then pass `--covariance` to Part 3 with a separate output directory and tag.
+- **Tradability:** the main forecast applies local month-end vendor flags in Parts 3 and 4; pass `--tradability-data` to both for custom forecasts.
+- **Cost sensitivity:** `--cost-sweep 0,10,30,50` is enabled by default; pass `--cost-sweep ''` to skip.
 
-`--cost-sweep 0,10,30,50` (the default) adds the cost-sensitivity table; pass
-`--cost-sweep ''` to skip it.
+## Final Experiment
 
-## Final experiment
-
-Run the final pipeline from the repository root with the course data in `data/`.
-The locked `final` extra adds h5py for the original Part 1 daily features. The
-pipeline extracts the descriptor archive once and saves all final outputs
-under a separate `final` tag. Supply `--descriptors /path/to/descriptors.pkl` to
-reuse a trusted extracted copy.
+Run from the repository root with course data in `data/`. The `final` extra includes `h5py` for Part 1 daily features. Pass `--descriptors /path/to/descriptors.pkl` to reuse an extracted copy.
 
 ~~~bash
 OPENBLAS_NUM_THREADS=1 uv run --locked --extra risk --extra final python -m sta4020_project.final_pipeline
@@ -85,93 +48,56 @@ typst compile --root . docs/final_report.typ part4_evaluation/reports/final/Fina
 typst compile --root . docs/final_slides.typ part4_evaluation/reports/final/Final_Slides.pdf
 ~~~
 
-Reruns take a fresh tag, such as `--tag final-recheck`. Compile either Typst
-source with `--input tag=final-recheck` and write to that tag’s report directory.
+Use a new tag (e.g. `--tag final-recheck`) for reruns, and pass `--input tag=final-recheck` when compiling Typst. Outputs and manifests live in `part4_evaluation/reports/final/`. See [docs/FINAL_EXPERIMENT_DESIGN.md](docs/FINAL_EXPERIMENT_DESIGN.md) for experiment rules.
 
-The model selection, input hashes, experiment commands and output tables are in
-`part4_evaluation/reports/final/`. See the [experiment design](docs/FINAL_EXPERIMENT_DESIGN.md)
-for the comparison and execution rules.
+## Raw Data
 
-## Raw data
+`data/` is excluded from git (530 MB course payload). Copy the files into `data/` and run `uv run sta4020-check-data`. See [data/README.md](data/README.md) for the schema. `price.h5` requires `h5py` (included in `--extra final`, or `uv add h5py`).
 
-data/ is not committed: the payload is 530 MB and ships with the course
-material.  Copy it in, keeping the file names, then run
-`uv run sta4020-check-data`.  The expected layout and the meaning of each file
-are documented in [data/README.md](data/README.md), which is tracked even though
-its neighbours are not.  price.h5 needs h5py, which is only required for the
-daily frequency route, so it is not in the default dependencies
-(`uv add h5py` if you go that way).
+## Directory Map
 
-## Directory map
-
-| Path | What it is | Owner |
+| Path | Description | Owner |
 | --- | --- | --- |
-| data/ | Raw vendor data: 5378 monthly returns, daily prices, market caps, turnover, blacklists, FF5, risk-free, CSI 500. Not committed. | shared |
-| docs/ | Project guideline PDF and the lecture slides. | shared |
-| docs/PLAN.md | Engineering plan: deadlines, interfaces, work breakdown, risks. | shared |
-| part1_return_model/ | Current FM and tree notebooks; see the [Part 1 run guide](part1_return_model/README.md). | Part 1 |
-| part2_risk_model/ | Part 2 package (import risk_model), its tests and the spec; vendored, see PROVENANCE.md. | Part 2 |
-| part3_portfolio/ | Part 3 script Part3.py with a CLI; defaults to the artifacts tree. See the [portfolio guide](part3_portfolio/README.md). | Part 3 |
-| part4_evaluation/ | Part 4 report output: tables/, figures/, REPORT.md per run tag. Not committed. | Part 4 |
-| src/sta4020_project/ | Shared code: artifact contracts, metrics, inference, backtest engine, attribution, reporting, checks, CLI. | Part 4 (shared) |
-| artifacts/part1/ | Part 1 outputs: expected returns, realised returns, candidate universe. | Part 1 |
-| artifacts/part2/ | Part 2 output: P2_Covariance.csv. | Part 2 |
-| artifacts/part3/ | Part 3 output: Portfolio_Weights.csv. | Part 3 |
-| artifacts/sample/ | The mock 20-asset, 24-month panel from the Part 3 zip. Only used for smoke tests. | fixture |
-| tests/ | Unit tests for the shared code. | shared |
-| _incoming/ | The original zips, kept for provenance. Not committed. | shared |
+| `data/` | Raw vendor data (untracked). | shared |
+| `docs/` | Project guidelines, lecture slides, plan, report/slide sources. | shared |
+| `part1_return_model/` | FM and tree notebooks; see [Part 1 guide](part1_return_model/README.md). | Part 1 |
+| `part2_risk_model/` | Vendored risk model package (`risk_model`), tests, and spec; see [PROVENANCE.md](part2_risk_model/PROVENANCE.md). | Part 2 |
+| `part3_portfolio/` | Portfolio construction CLI (`Part3.py`); see [portfolio guide](part3_portfolio/README.md). | Part 3 |
+| `part4_evaluation/` | Evaluation outputs (`tables/`, `figures/`, `REPORT.md` per tag, untracked). | Part 4 |
+| `src/sta4020_project/` | Layered package: `shared/` (contracts, data, descriptors, tradability, config), `part1/`, `part2/`, `part4/`, and `pipeline/`. | shared |
+| `artifacts/part1/` | Part 1 outputs: expected returns, actual returns, candidate universe. | Part 1 |
+| `artifacts/part2/` | Part 2 output: `P2_Covariance.csv`. | Part 2 |
+| `artifacts/part3/` | Part 3 output: `Portfolio_Weights.csv`. | Part 3 |
+| `artifacts/sample/` | 20-asset, 24-month mock panel for smoke tests. | fixture |
+| `tests/` | Unit tests for shared code. | shared |
+| `_incoming/` | Original delivery archives (untracked). | shared |
 
-There is no Makefile and no shell glue: every task is either a console script
-declared in pyproject.toml (`[project.scripts]`) or `uv run python <file>`.
+Tasks run via `[project.scripts]` in `pyproject.toml` or `uv run python <file>`.
 
-## What each part must deliver
+## Part Deliverables
 
-The exchange format is deliberately narrow: four CSV files, described in
-docs/PLAN.md under "Artifact contract".  Nothing else crosses a part boundary,
-so any part can be re-run - or replaced by a better model - without touching
-the others.
+Parts communicate solely through four CSV contracts defined in [docs/PLAN.md](docs/PLAN.md):
 
-- Part 1 -> artifacts/part1/P1_Expected_Returns.csv (the current FM forecast),
-  Actual_Returns.csv, and P1_Candidate_Universe.csv. Rebuild covariance and
-  weights against the updated universe; the legacy validated forecast is not a default.
-- Part 2 -> artifacts/part2/P2_Covariance.csv
-- Part 3 -> artifacts/part3/Portfolio_Weights.csv
-- Part 4 -> part4_evaluation/reports/TAG/REPORT.md plus tables and figures
+- **Part 1** -> `artifacts/part1/P1_Expected_Returns.csv` (FM forecast), `Actual_Returns.csv`, `P1_Candidate_Universe.csv`
+- **Part 2** -> `artifacts/part2/P2_Covariance.csv`
+- **Part 3** -> `artifacts/part3/Portfolio_Weights.csv`
+- **Part 4** -> `part4_evaluation/reports/TAG/REPORT.md` plus tables and figures
 
-## Working agreement
+## Working Agreement
 
-- One branch per part, pull requests into main; the artifact contract is the
-  review checklist for every pull request that touches a part boundary.
-- Never commit data/ or _incoming/; .gitignore already excludes them.
-- Run `uv run pytest`, `uv run sta4020-check-data` and
-  `uv run sta4020-check-artifacts` before asking for a review.
-- Report numbers are only quoted from part4_evaluation/reports/, never from an
-  ad-hoc notebook cell.
-- Record generated reports as tag directories; a tag is never overwritten by a
-  later run, because a number in the slides must stay reproducible.
+- Use one branch per part and merge via PR to `main`; check artifact contracts on boundary changes.
+- Keep `data/` and `_incoming/` out of git.
+- Run `uv run pytest`, `uv run sta4020-check-data`, and `uv run sta4020-check-artifacts` before requesting review.
+- Quote report numbers only from `part4_evaluation/reports/`.
+- Write each evaluation run to a distinct tag directory to keep reported numbers reproducible.
+- **Bilingual docs:** English is primary; Simplified Chinese counterparts use `.zh-CN.md`. Sync both when updating commands, paths, or interfaces. Leave upstream docs, course materials, and generated reports unchanged.
 
-### Maintaining bilingual docs
-
-English is the default entry point. Simplified Chinese counterparts use the
-`.zh-CN.md` suffix, with a link to the other language at the top of each page.
-When changing commands, paths, interfaces, or working agreements, update both
-versions in the same pull request. Leave upstream docs, course materials, and
-generated reports as they are.
-
-## Getting a working copy
-
-The repository is private: a collaborator needs an invite from the owner
-before cloning, and then clones with their own credentials.  Nothing else in
-the process is user specific.
+## Clone & Initialize
 
 ~~~bash
 git clone https://github.com/ShenYouSOTA/sta4020-group-project.git
 cd sta4020-group-project
 uv sync
-# copy the raw data into data/, then:
+# copy raw data into data/, then:
 uv run sta4020-check-data && uv run pytest && uv run sta4020-sample
 ~~~
-
-If a fresh clone cannot write to .git because the directory was created by a
-different user, that is a local ownership problem, not a project one; fix the
-ownership of the clone rather than adding per-machine paths to the code.

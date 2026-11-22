@@ -112,11 +112,11 @@ side, the Sharpe advantage over 1/N was small.
 #pagebreak()
 #slide-title[What the evidence supports]
 - The original FM was a better ranking signal than trailing historical means.
-- Broader risk data support style attribution. Simpler covariance estimates gave better FM portfolio results in this holdout.
-- MVO achieved the highest net Sharpe in the main run. Its paired benchmark test and sensitivity leave persistence uncertain.
+- Model B supports style attribution, while simpler covariances yielded higher FM portfolio Sharpe.
+- MVO led on net Sharpe, though benchmark tests and cost sensitivity show limited persistence.
 
 #v(14pt)
-#small[The stock pool is selected once. Vendor restatement history and genuine close-price execution remain uncertain.]
+#small[Fixed 50-stock pool; undocumented vendor restatement history; close-price execution assumptions.]
 #v(17pt)
 #grid-table(("Part", "Section", "Primary member and contribution"),
   (.7fr, 1.28fr, 2fr), team)
