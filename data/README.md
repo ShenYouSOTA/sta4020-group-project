@@ -1,5 +1,7 @@
 # Raw data
 
+English | [简体中文](README.zh-CN.md)
+
 This directory is not committed: the files are 530 MB and are distributed with
 the course material, not with the repository.  Copy them here before running
 anything that touches the real data.  The code only ever refers to paths

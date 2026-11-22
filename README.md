@@ -1,5 +1,7 @@
 # STA4020 Final Project - group repository
 
+English | [简体中文](README.zh-CN.md)
+
 Four-part project: forecast expected returns (Part 1), estimate the risk
 structure (Part 2), build portfolios (Part 3), and evaluate them out of sample
 (Part 4).  Each part is one person's 25% contribution; the final slides and
@@ -52,7 +54,7 @@ Build the real portfolios and evaluate them once the artifacts exist:
 
 ~~~bash
 uv run python part3_portfolio/Part3.py                    # -> artifacts/part3
-uv run sta4020-evaluate --tag run1 --cost-bps 10          # -> reports/run1
+uv run sta4020-evaluate --tag run1 --cost-bps 10          # -> part4_evaluation/reports/run1
 ~~~
 
 `--cost-sweep 0,10,30,50` (the default) adds the cost-sensitivity table; pass
@@ -77,7 +79,7 @@ daily frequency route, so it is not in the default dependencies
 | docs/PLAN.md | Engineering plan: deadlines, interfaces, work breakdown, risks. | shared |
 | part1_return_model/ | Part 1 notebooks and their original README, unchanged as delivered. | Part 1 |
 | part2_risk_model/ | Part 2 package (import risk_model), its tests and the spec; vendored, see PROVENANCE.md. | Part 2 |
-| part3_portfolio/ | Part 3 script Part3.py with a CLI; defaults to the artifacts tree. | Part 3 |
+| part3_portfolio/ | Part 3 script Part3.py with a CLI; defaults to the artifacts tree. See the [portfolio guide](part3_portfolio/README.md). | Part 3 |
 | part4_evaluation/ | Part 4 report output: tables/, figures/, REPORT.md per run tag. Not committed. | Part 4 |
 | src/sta4020_project/ | Shared code: artifact contracts, metrics, inference, backtest engine, attribution, reporting, checks, CLI. | Part 4 (shared) |
 | artifacts/part1/ | Part 1 outputs: expected returns, realised returns, candidate universe. | Part 1 |
@@ -115,6 +117,14 @@ the others.
   ad-hoc notebook cell.
 - Record generated reports as tag directories; a tag is never overwritten by a
   later run, because a number in the slides must stay reproducible.
+
+### Maintaining bilingual docs
+
+English is the default entry point. Simplified Chinese counterparts use the
+`.zh-CN.md` suffix, with a link to the other language at the top of each page.
+When changing commands, paths, interfaces, or working agreements, update both
+versions in the same pull request. Leave upstream docs, course materials, and
+generated reports as they are.
 
 ## Getting a working copy
 

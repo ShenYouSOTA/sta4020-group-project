@@ -3,6 +3,7 @@ _incoming/
 # Ignore the payload but keep the layout documentation.
 data/*
 !data/README.md
+!data/README.zh-CN.md
 
 # Generated artifacts and reports
 artifacts/part2/*.csv

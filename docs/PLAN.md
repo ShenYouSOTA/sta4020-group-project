@@ -1,5 +1,7 @@
 # Engineering plan
 
+English | [简体中文](PLAN.zh-CN.md)
+
 Status: first integration harness is running on mock data; the real Part 2 and
 Part 3 artifacts are still missing.  Owner of this document: Part 4.
 

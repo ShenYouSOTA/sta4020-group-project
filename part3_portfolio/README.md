@@ -1,5 +1,7 @@
 # Part 3 - portfolio construction
 
+English | [简体中文](README.zh-CN.md)
+
 Part3.py builds five long-only portfolios per rebalancing month from the forecast
 panel (Part 1) and the covariance panel (Part 2), and writes the weights that
 Part 4 evaluates.
