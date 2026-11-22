@@ -1,9 +1,4 @@
-"""Pre-flight checks: raw data present, and the inter-part CSVs well formed.
-
-Both are exposed as console scripts by pyproject.toml, so they run as
-`uv run sta4020-check-data` and `uv run sta4020-check-artifacts` without any
-working directory assumption: paths are resolved from the project root.
-"""
+"""Pre-flight checks: raw data present, and the inter-part CSVs well formed."""
 
 from __future__ import annotations
 
@@ -11,7 +6,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from . import contracts
+from ..shared import contracts
 
 REQUIRED_DATA = {
     "monthly_returns.pkl": "monthly returns panel",
@@ -24,20 +19,21 @@ REQUIRED_DATA = {
     "zz500.pk": "CSI 500 daily bars",
 }
 OPTIONAL_DATA = {
-    "price.h5": "daily adjusted prices (needed only for the daily frequency route)",
+    "price.h5": "daily adjusted prices (needed for daily frequency features)",
 }
 
 
 def human(size: int) -> str:
+    value = float(size)
     for unit in ("B", "KB", "MB", "GB"):
-        if size < 1024 or unit == "GB":
-            return f"{size:.0f} {unit}" if unit == "B" else f"{size:.1f} {unit}"
-        size /= 1024
-    return f"{size:.1f} GB"
+        if value < 1024 or unit == "GB":
+            return f"{value:.0f} {unit}" if unit == "B" else f"{value:.1f} {unit}"
+        value /= 1024
+    return f"{value:.1f} GB"
 
 
 def check_data(argv: list[str] | None = None) -> int:
-    """Verify that the raw data files are where the pipeline expects them."""
+    """Verify that the raw data files are present under data/."""
     data = contracts.Paths().root / "data"
     missing = []
     print(f"data directory: {data}")
@@ -55,18 +51,14 @@ def check_data(argv: list[str] | None = None) -> int:
         print(f"  {state} {name:<22} {size:>9}  {description} (optional)")
 
     if missing:
-        print()
-        print(f"{len(missing)} required file(s) missing.  Copy the raw data into data/;")
-        print("see data/README.md for the expected layout.  A fresh clone never has them,")
-        print("because the files are 530 MB and excluded from git.")
+        print(f"\n{len(missing)} required file(s) missing. Copy raw data into data/ (see data/README.md).")
         return 1
-    print()
-    print("all required data files are present")
+    print("\nall required data files are present")
     return 0
 
 
 def check_artifacts(argv: list[str] | None = None) -> int:
-    """Validate the CSV artifacts that Parts 1-3 hand to Part 4."""
+    """Validate the CSV artifacts that Parts 1–3 hand to Part 4."""
     parser = argparse.ArgumentParser(description=check_artifacts.__doc__)
     parser.add_argument("--expected", type=Path, default=None)
     parser.add_argument("--actual", type=Path, default=None)

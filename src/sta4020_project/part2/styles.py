@@ -1,9 +1,8 @@
-"""Construct and fit the eight-style Part 2 risk model."""
+"""Construct and fit the eight-style Part 2 risk model (Implementation A)."""
 
-import pickle
-import subprocess
+from __future__ import annotations
+
 from dataclasses import replace
-from tempfile import TemporaryFile
 
 import numpy as np
 import pandas as pd
@@ -11,9 +10,10 @@ from risk_model.factor_model import RiskPanel, fit_factor_model
 from risk_model.integration import compute_asset_covariance
 from risk_model.stable_risk import estimate_factor_covariance, estimate_specific_variance
 
-from .cli import monthly_risk_free
-from .risk import monthly_panel, restore_delisted_asset
-from .tradability import DELISTED_ASSET, DELISTED_FROM
+from ..shared.descriptors import descriptor_fields
+from ..shared.market_data import monthly_panel, monthly_risk_free
+from ..shared.tradability import DELISTED_ASSET, DELISTED_FROM
+from .risk import restore_delisted_asset
 
 STYLES = {
     "size": ("mktcap",),
@@ -26,31 +26,10 @@ STYLES = {
     "leverage": ("total_liab_to_total_asset_mrq",),
 }
 
-
-def descriptor_fields(data_dir, extracted_path, dates, assets, names=None):
-    """Read the vendor pickle and retain only the required monthly fields."""
-    if extracted_path is not None:
-        with extracted_path.open("rb") as handle:
-            descriptors = pickle.load(handle)
-    else:
-        with TemporaryFile() as handle:
-            subprocess.run(
-                ["unzip", "-p", str(data_dir / "addition" / "descriptors.zip"), "descriptors.pkl"],
-                stdout=handle, check=True,
-            )
-            handle.seek(0)
-            descriptors = pickle.load(handle)
-
-    fields = {}
-    for name in sorted(names or {field for components in STYLES.values() for field in components}):
-        series = descriptors[name]
-        mask = (series.index.get_level_values("asset").isin(assets)
-                & series.index.get_level_values("date").to_period("M").isin(dates.to_period("M")))
-        fields[name] = monthly_panel(series[mask].unstack("asset"), dates, assets)
-    return fields
+STYLE_FIELD_NAMES = tuple(sorted({field for components in STYLES.values() for field in components}))
 
 
-def transform_component(frame, *, log, reverse, standardize):
+def transform_component(frame: pd.DataFrame, *, log: bool, reverse: bool, standardize: bool) -> pd.DataFrame:
     frame = frame.where(np.isfinite(frame))
     if log:
         frame = np.log(frame.where(frame > 0))
@@ -65,30 +44,29 @@ def transform_component(frame, *, log, reverse, standardize):
     return -frame if reverse else frame
 
 
-def build_styles(fields):
+def build_styles(fields: dict[str, pd.DataFrame]) -> dict[str, pd.DataFrame]:
     styles = {}
     for name, fields_for_style in STYLES.items():
         components = [
             transform_component(
-                fields[field], log=field in {"mktcap", "turnover_252"},
+                fields[field],
+                log=field in {"mktcap", "turnover_252"},
                 reverse=field in {"momentum_21", "accrual_to_asset_ttm"},
                 standardize=len(fields_for_style) > 1,
             )
             for field in fields_for_style
         ]
-        style = pd.concat(components).groupby(level=0).mean()
-        styles[name] = style
-
+        styles[name] = pd.concat(components).groupby(level=0).mean()
     return styles
 
 
-def load_risk_panel(data_dir, returns, extracted_path=None):
+def load_risk_panel(data_dir, returns: pd.DataFrame, extracted_path=None):
     dates, assets = returns.index, returns.columns
-    fields = descriptor_fields(data_dir, extracted_path, dates, assets)
+    fields = descriptor_fields(data_dir, extracted_path, dates, assets, STYLE_FIELD_NAMES)
     caps = monthly_panel(pd.read_pickle(data_dir / "mcap.pkl"), dates, assets)
     observed = fields["mktcap"].notna()
-    np.testing.assert_allclose(fields["mktcap"].to_numpy()[observed], caps.to_numpy()[observed],
-                               rtol=1e-6, atol=0)
+    if not np.allclose(fields["mktcap"].to_numpy()[observed], caps.to_numpy()[observed], rtol=1e-6, atol=0):
+        raise ValueError("descriptors['mktcap'] diverges from data/mcap.pkl beyond 1e-6")
     delisted = dates >= DELISTED_FROM
     if DELISTED_ASSET in assets:
         caps.loc[delisted, DELISTED_ASSET] = np.nan

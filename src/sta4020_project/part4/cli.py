@@ -1,61 +1,36 @@
-"""Command line entry point for the Part 4 evaluation.
-
-Example:
-    python -m sta4020_project.cli --tag sample --cost-bps 10
-
-With no arguments it reads the canonical artifacts:
-artifacts/part1/P1_Expected_Returns.csv, artifacts/part1/Actual_Returns.csv,
-artifacts/part3/Portfolio_Weights.csv and writes to
-part4_evaluation/reports/<tag>/.
-"""
+"""Command line entry point for the Part 4 evaluation."""
 
 from __future__ import annotations
 
 import argparse
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 
+from ..shared import contracts
+from ..shared.contracts import Paths
+from ..shared.market_data import monthly_risk_free
+from ..shared.tradability import load_eligibility, load_suspensions
 from . import attribution as attribution_module
-from . import contracts
 from . import report as report_module
-from .backtest import DEFAULT_WINDOWS, run_models, subperiod_performance
-from .contracts import Paths
-from .tradability import load_eligibility, load_suspensions
+from .backtest import DEFAULT_WINDOWS, ExecutionMode, run_models, subperiod_performance
 
 BENCHMARK = "1/N"
-
-
-def monthly_risk_free(path: Path | None, dates: pd.Index) -> pd.Series | float:
-    """Compound the daily risk-free file into the months spanned by dates."""
-    if path is None or not Path(path).exists():
-        return 0.0
-    frame = pd.read_csv(path)
-    if "date" not in frame.columns or "RF" not in frame.columns:
-        return 0.0
-    frame["date"] = pd.to_datetime(frame["date"], errors="raise")
-    frame = frame.sort_values("date")
-    growth = (1.0 + pd.to_numeric(frame["RF"], errors="raise"))
-    periods = pd.PeriodIndex(frame["date"], freq="M")
-    monthly = growth.groupby(periods).prod() - 1.0
-    wanted = pd.PeriodIndex(pd.DatetimeIndex(dates), freq="M")
-    values = monthly.reindex(wanted)
-    if values.isna().any():
-        values = values.fillna(0.0)
-    return pd.Series(values.to_numpy(dtype=float), index=pd.DatetimeIndex(dates))
 
 
 def cost_sensitivity(panels: dict[str, pd.DataFrame], realised: pd.DataFrame,
                      mapping: pd.Series, levels, *, risk_free=0.0,
                      periods_per_year: int = 12, benchmark: str = BENCHMARK,
                      eligibility: pd.DataFrame | None = None,
-                     suspensions: pd.DataFrame | None = None) -> pd.DataFrame:
+                     suspensions: pd.DataFrame | None = None,
+                     execution_mode: ExecutionMode | None = None) -> pd.DataFrame:
     """Metrics for every model at every cost level, as a tidy long table."""
     rows = []
     for level in levels:
-        results = run_models(panels, realised, mapping, cost_bps=level, benchmark=benchmark,
-                             eligibility=eligibility, suspensions=suspensions)
+        results = run_models(
+            panels, realised, mapping, cost_bps=level, benchmark=benchmark,
+            eligibility=eligibility, suspensions=suspensions, execution_mode=execution_mode,
+        )
         for name, result in results.items():
             values = result.metrics(risk_free=risk_free, periods_per_year=periods_per_year)
             rows.append({
@@ -74,7 +49,8 @@ def evaluate(weights_path: Path, expected_path: Path, actual_path: Path, out_dir
              risk_free_path: Path | None = None, cost_bps: float = 0.0,
              make_figures: bool = True, windows: dict | None = None,
              cost_levels=None, weights_label: str | None = None,
-             tradability_data: Path | None = None, freeze_suspensions: bool = False, per_side_cost: bool = False) -> dict:
+             tradability_data: Path | None = None, freeze_suspensions: bool = False,
+             per_side_cost: bool = False) -> dict:
     """Run the full Part 4 evaluation and return the written paths."""
     expected = contracts.read_wide(expected_path, label=Path(expected_path).name)
     actual = contracts.read_wide(actual_path, label="Actual_Returns")
@@ -100,12 +76,21 @@ def evaluate(weights_path: Path, expected_path: Path, actual_path: Path, out_dir
 
     if freeze_suspensions and tradability_data is None:
         raise ValueError("frozen execution requires tradability data")
-    suspensions = load_suspensions(tradability_data, expected.index, assets) if freeze_suspensions else None
-    if per_side_cost and suspensions is None:
-        suspensions = pd.DataFrame(False, index=expected.index, columns=assets)
+    if freeze_suspensions:
+        execution_mode = ExecutionMode.FROZEN_PER_SIDE
+        suspensions = load_suspensions(tradability_data, expected.index, assets)
+    elif per_side_cost:
+        execution_mode = ExecutionMode.IMMEDIATE_PER_SIDE
+        suspensions = None
+    else:
+        execution_mode = ExecutionMode.LEGACY_HALF_L1
+        suspensions = None
+
     risk_free = monthly_risk_free(risk_free_path, mapping.values)
-    results = run_models(panels, actual, mapping, cost_bps=cost_bps, benchmark=BENCHMARK,
-                         eligibility=eligibility, suspensions=suspensions)
+    results = run_models(
+        panels, actual, mapping, cost_bps=cost_bps, benchmark=BENCHMARK,
+        eligibility=eligibility, suspensions=suspensions, execution_mode=execution_mode,
+    )
 
     attribution_tables = {}
     diagnostics = {}
@@ -126,6 +111,11 @@ def evaluate(weights_path: Path, expected_path: Path, actual_path: Path, out_dir
             result, windows or DEFAULT_WINDOWS, risk_free=risk_free)
 
     realised_dates = pd.DatetimeIndex(mapping.to_numpy())
+    execution_labels = {
+        ExecutionMode.FROZEN_PER_SIDE: "frozen suspended holdings, per-side cash-funded cost",
+        ExecutionMode.IMMEDIATE_PER_SIDE: "immediate targets, per-side cash-funded cost",
+        ExecutionMode.LEGACY_HALF_L1: "immediate targets, half-L1 turnover cost after inception",
+    }
     config = {
         "weights file": weights_label or _display_path(weights_path),
         "expected returns": _display_path(expected_path),
@@ -134,9 +124,7 @@ def evaluate(weights_path: Path, expected_path: Path, actual_path: Path, out_dir
         "origins": len(panels[list(panels)[0]].index) if panels else 0,
         "realised months": len(realised_dates),
         "transaction cost (bp, one-way)": cost_bps,
-        "execution": ("frozen suspended holdings, per-side cash-funded cost" if freeze_suspensions
-                      else "immediate targets, per-side cash-funded cost" if per_side_cost
-                      else "immediate targets, half-L1 turnover cost after inception"),
+        "execution": execution_labels[execution_mode],
         "first realised month": str(realised_dates.min().date()),
         "last realised month": str(realised_dates.max().date()),
     }
@@ -144,20 +132,31 @@ def evaluate(weights_path: Path, expected_path: Path, actual_path: Path, out_dir
         config["tradability data"] = _display_path(tradability_data)
     sensitivity = None
     if cost_levels:
-        sensitivity = cost_sensitivity(panels, actual, mapping, cost_levels,
-                                       risk_free=risk_free, eligibility=eligibility, suspensions=suspensions)
+        sensitivity = cost_sensitivity(
+            panels, actual, mapping, cost_levels, risk_free=risk_free,
+            eligibility=eligibility, suspensions=suspensions, execution_mode=execution_mode,
+        )
     written = report_module.write_report(
         results, BENCHMARK, out_dir, risk_free=risk_free, attribution_tables=attribution_tables,
         diagnostics=diagnostics, config=config, make_figures=make_figures,
         sensitivity=sensitivity)
 
-    if suspensions is not None:
+    if execution_mode in (ExecutionMode.FROZEN_PER_SIDE, ExecutionMode.IMMEDIATE_PER_SIDE):
         execution_rows = []
+        frozen_mask = (
+            suspensions
+            if suspensions is not None
+            else pd.DataFrame(False, index=expected.index, columns=assets)
+        )
         for name, result in results.items():
             result.weights.to_csv(out_dir / "tables" / f"executed_{name.replace('/', '_')}.csv", index_label="Date")
-            frozen = result.weights.where(suspensions, 0.0).sum(axis=1)
-            execution_rows.append({"Model": name, "MonthsWithFrozenHoldings": int((frozen > 1e-10).sum()),
-                                   "MaxFrozenWeight": frozen.max(), "MaxExecutedWeight": result.weights.max().max()})
+            frozen = result.weights.where(frozen_mask, 0.0).sum(axis=1)
+            execution_rows.append({
+                "Model": name,
+                "MonthsWithFrozenHoldings": int((frozen > 1e-10).sum()),
+                "MaxFrozenWeight": frozen.max(),
+                "MaxExecutedWeight": result.weights.max().max(),
+            })
         pd.DataFrame(execution_rows).to_csv(out_dir / "tables" / "execution.csv", index=False)
 
     subperiod_dir = out_dir / "tables" / "subperiods"

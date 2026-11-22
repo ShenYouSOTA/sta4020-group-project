@@ -15,11 +15,13 @@ dependencies = [
 ]
 
 [project.scripts]
-sta4020-check-data = "sta4020_project.checks:check_data"
-sta4020-check-artifacts = "sta4020_project.checks:check_artifacts"
-sta4020-sample = "sta4020_project.sample_pipeline:main"
-sta4020-evaluate = "sta4020_project.cli:main"
-sta4020-build-risk = "sta4020_project.risk:main"
+sta4020-check-data = "sta4020_project.pipeline.checks:check_data"
+sta4020-check-artifacts = "sta4020_project.pipeline.checks:check_artifacts"
+sta4020-sample = "sta4020_project.pipeline.sample:main"
+sta4020-build-returns = "sta4020_project.part1.forecasts:main"
+sta4020-build-risk = "sta4020_project.part2.risk:main"
+sta4020-evaluate = "sta4020_project.part4.cli:main"
+sta4020-run-final = "sta4020_project.pipeline.final:main"
 
 [project.optional-dependencies]
 risk = [

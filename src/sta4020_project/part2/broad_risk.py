@@ -1,4 +1,6 @@
-"""Broad monthly factor fits and fixed-universe covariance forecasts."""
+"""Broad monthly factor fits and fixed-universe covariance forecasts (Implementation B)."""
+
+from __future__ import annotations
 
 from dataclasses import dataclass
 
@@ -8,10 +10,11 @@ from risk_model.factor_model import factor_holdings
 from risk_model.integration import compute_asset_covariance
 from risk_model.stable_risk import estimate_factor_covariance
 
-from .cli import monthly_risk_free
-from .risk import monthly_panel
-from .styles import STYLES, build_styles, descriptor_fields
-from .tradability import DELISTED_ASSET, DELISTED_FROM
+from ..shared.descriptors import descriptor_fields
+from ..shared.market_data import monthly_panel, monthly_risk_free
+from ..shared.tradability import DELISTED_ASSET, DELISTED_FROM
+from .risk import write_covariances
+from .styles import STYLE_FIELD_NAMES, build_styles
 
 
 @dataclass
@@ -22,7 +25,7 @@ class BroadHistory:
     coverage: pd.DataFrame
 
 
-def estimate_history(returns, caps, styles, fixed_assets, specific_start, *, max_names=800):
+def estimate_history(returns, caps, styles, fixed_assets, specific_start, *, max_names: int = 800) -> BroadHistory:
     """Normalize using the formation sample, before filtering for observed labels."""
     dates = returns.index
     positions = returns.columns.get_indexer(fixed_assets)
@@ -85,16 +88,16 @@ def estimate_history(returns, caps, styles, fixed_assets, specific_start, *, max
     )
 
 
-def load_history(data_dir, descriptors, origins, fixed_assets, specific_start, broad_start):
+def load_history(data_dir, descriptors, origins, fixed_assets, specific_start, broad_start) -> BroadHistory:
     dates = pd.date_range(broad_start, origins[-1] + pd.offsets.MonthEnd(), freq="ME")
     raw_returns = pd.read_pickle(data_dir / "monthly_returns.pkl")
     assets = raw_returns.columns[raw_returns.columns.str.fullmatch(r"\d{6}\.(SH|SZ)")].sort_values()
     returns = monthly_panel(raw_returns, dates, assets)
     caps = monthly_panel(pd.read_pickle(data_dir / "mcap.pkl"), dates, assets)
-    fields = descriptor_fields(data_dir, descriptors, dates, assets)
+    fields = descriptor_fields(data_dir, descriptors, dates, assets, STYLE_FIELD_NAMES)
     common = np.isfinite(fields["mktcap"]) & np.isfinite(caps)
-    np.testing.assert_allclose(fields["mktcap"].to_numpy()[common], caps.to_numpy()[common],
-                               rtol=1e-6, atol=0)
+    if not np.allclose(fields["mktcap"].to_numpy()[common], caps.to_numpy()[common], rtol=1e-6, atol=0):
+        raise ValueError("descriptors['mktcap'] diverges from data/mcap.pkl beyond 1e-6")
     # Remove carried quotes after delisting before cross-sectional transforms.
     if DELISTED_ASSET in assets:
         for field in fields.values():
@@ -106,7 +109,7 @@ def load_history(data_dir, descriptors, origins, fixed_assets, specific_start, b
     return estimate_history(returns.sub(risk_free, axis=0), caps, styles, fixed_assets, specific_start)
 
 
-def forecast_components(history, origins):
+def forecast_components(history: BroadHistory, origins):
     """Use only factor and residual returns realized by each forecast origin."""
     dates = pd.DatetimeIndex(history.coverage["Formation"])
     for origin in origins:
@@ -124,9 +127,7 @@ def forecast_components(history, origins):
         yield exposure, factor_covariance, specific
 
 
-def write_broad_risk(path, history, origins, assets):
-    from .risk import write_covariances
-
+def write_broad_risk(path, history: BroadHistory, origins, assets) -> None:
     components = list(forecast_components(history, origins))
     write_covariances(path, origins, assets,
                       (compute_asset_covariance(*parts) for parts in components))

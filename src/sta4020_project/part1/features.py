@@ -1,5 +1,7 @@
 """Headless version of the Part 1 notebook's Shanghai/Shenzhen feature builder."""
 
+from __future__ import annotations
+
 import h5py
 import numpy as np
 import pandas as pd
@@ -9,15 +11,20 @@ TRAIN_MONTHS = 72
 RISK_MONTHS = 36
 
 
-def month_index(frame):
+def _require(condition: bool, message: str) -> None:
+    if not condition:
+        raise ValueError(message)
+
+
+def month_index(frame: pd.DataFrame) -> pd.DataFrame:
     frame = frame.copy()
     frame.index = pd.DatetimeIndex(frame.index).to_period("M")
     frame = frame.sort_index()
-    assert frame.index.is_unique and frame.columns.is_unique
+    _require(frame.index.is_unique and frame.columns.is_unique, "monthly panel index and columns must be unique")
     return frame
 
 
-def restrictions_on_days(path, days):
+def restrictions_on_days(path, days) -> dict[pd.Timestamp, pd.Index]:
     records = pd.read_pickle(path).index
     dates = records.get_level_values("date")
     selected = records[dates.isin(days)]
@@ -27,7 +34,7 @@ def restrictions_on_days(path, days):
     }
 
 
-def load_daily_amount(path, days, asset_columns):
+def load_daily_amount(path, days, asset_columns) -> pd.DataFrame:
     amount = pd.read_pickle(path)["total_turnover"]
     date_level = amount.index.levels[1]
     keep = date_level.isin(days)[amount.index.codes[1]]
@@ -36,14 +43,13 @@ def load_daily_amount(path, days, asset_columns):
         wide.columns.str.replace(".XSHE", ".SZ", regex=False)
         .str.replace(".XSHG", ".SH", regex=False)
     )
-    assert wide.index.is_unique and wide.columns.is_unique
+    _require(wide.index.is_unique and wide.columns.is_unique, "daily amount index and columns must be unique")
     return wide.reindex(index=days, columns=asset_columns).astype("float32")
 
 
-
-def pca_exposures(history):
+def pca_exposures(history: pd.DataFrame) -> tuple[pd.DataFrame, np.ndarray]:
     complete = history.dropna(axis=1)
-    assert complete.shape[1] >= MIN_FACTOR_PAIRS
+    _require(complete.shape[1] >= MIN_FACTOR_PAIRS, f"need at least {MIN_FACTOR_PAIRS} complete stocks for PCA")
     centered = complete.to_numpy() - complete.to_numpy().mean(axis=0)
     variances, directions = np.linalg.eigh(centered @ centered.T)
     top = directions[:, -3:][:, ::-1]
@@ -69,14 +75,23 @@ class ReturnFeatures:
         first_feature_month = first_formation - (TRAIN_MONTHS + 1)
         last_target = origins[-1] + 1
         formation_months = pd.period_range(first_feature_month, last_target - 1, freq="M")
-        assert raw_returns.loc[:last_target].index.equals(pd.period_range(raw_returns.index[0], last_target, freq="M"))
+        _require(
+            raw_returns.loc[:last_target].index.equals(pd.period_range(raw_returns.index[0], last_target, freq="M")),
+            "monthly_returns.pkl must have contiguous monthly dates through the last target month",
+        )
 
         with h5py.File(data_dir / "price.h5", "r") as price_file:
             store = price_file["price"]
             trading_days = pd.DatetimeIndex(store["axis1"][:])
             price_columns = pd.Index(store["axis0"].asstr()[:], name="Asset")
-            assert price_columns.equals(pd.Index(store["block0_items"].asstr()[:]))
-            assert trading_days.is_unique and trading_days.is_monotonic_increasing
+            _require(
+                price_columns.equals(pd.Index(store["block0_items"].asstr()[:])),
+                "price.h5 axis0 and block0_items must match",
+            )
+            _require(
+                trading_days.is_unique and trading_days.is_monotonic_increasing,
+                "price.h5 trading days must be strictly increasing",
+            )
             start = trading_days.searchsorted((first_feature_month - 5).start_time)
             finish = trading_days.searchsorted(last_target.end_time, side="right")
             prices = pd.DataFrame(
@@ -89,13 +104,16 @@ class ReturnFeatures:
         prices = prices.reindex(columns=assets).where(lambda values: values.gt(0))
         returns = raw_returns.reindex(columns=assets).replace([np.inf, -np.inf], np.nan)
         market_cap = market_cap.reindex(columns=assets)
-        assert not returns.lt(-1).any().any()
+        _require(not returns.lt(-1).any().any(), "monthly returns contain values below -100%")
 
         exchange_month = pd.Series(prices.index, index=prices.index).groupby(prices.index.to_period("M"))
         last_close = exchange_month.last()
         signal_close = exchange_month.nth(-2)
         signal_close.index = signal_close.index.to_period("M")
-        assert (signal_close.reindex(formation_months) < last_close.reindex(formation_months)).all()
+        _require(
+            bool((signal_close.reindex(formation_months) < last_close.reindex(formation_months)).all()),
+            "signal close must precede month-end close for every formation month",
+        )
 
         audit_days = pd.Index(signal_close.reindex(formation_months)).union(
             pd.Index(last_close.reindex(origins))
@@ -103,7 +121,7 @@ class ReturnFeatures:
         blacklist = restrictions_on_days(data_dir / "BLACKLIST.pkl", audit_days)
         untradable = restrictions_on_days(data_dir / "UNTRADABLE.pkl", audit_days)
         daily_amount = load_daily_amount(data_dir / "daily_amount.pkl", prices.index, assets)
-        assert daily_amount.notna().sum().sum() > 100_000
+        _require(int(daily_amount.notna().sum().sum()) > 100_000, "daily_amount.pkl has unexpectedly few observations")
 
         daily_returns = prices.pct_change(fill_method=None)
         week_end_prices = (
@@ -136,7 +154,7 @@ class ReturnFeatures:
             & ~self.assets.isin(blocked)
         )
         eligible_assets = self.assets[eligible]
-        assert len(eligible_assets) >= MIN_FACTOR_PAIRS
+        _require(len(eligible_assets) >= MIN_FACTOR_PAIRS, f"{month}: fewer than {MIN_FACTOR_PAIRS} eligible assets")
         monthly_history = monthly_history.loc[:, eligible_assets]
         pca_features, _ = pca_exposures(monthly_history)
 

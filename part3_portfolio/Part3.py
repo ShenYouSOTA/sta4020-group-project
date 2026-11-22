@@ -1,33 +1,8 @@
 #!/usr/bin/env python3
 """Part 3 - portfolio construction.
 
-Reads the expected returns and the covariance panel that Parts 1 and 2 deliver,
-builds five portfolios per rebalancing month, and writes the weights that Part 4
-evaluates out of sample.
-
-Paths
------
-Every input is an explicit path, with the artifact contract of this repository
-as the default.  Nothing is read from the working directory, so the script
-behaves the same no matter where it is started from.  Override any default on
-the command line:
-
-    python part3_portfolio/Part3.py
-    python part3_portfolio/Part3.py \
-        --expected artifacts/sample/P1_Expected_Returns.csv \
-        --covariance artifacts/sample/P2_Covariance.csv \
-        --actual artifacts/sample/Actual_Returns.csv \
-        --output-dir /tmp/part3
-
-Outputs (written to --output-dir, default artifacts/part3):
-
-    Portfolio_Weights.csv          Date,Model,Asset,Weight   <- Part 4 consumes this
-    OOS_Portfolio_Returns.csv      Date,Model,Portfolio_Return (own bookkeeping)
-    Forecast_Portfolio_Metrics.csv Date,Model,Expected_Return,Expected_Volatility
-
-Performance metrics are deliberately not written here.  They ignore transaction
-costs and never compare against the 1/N benchmark, so the reference numbers live
-in the Part 4 report (see docs/PLAN.md, section 3).
+Reads expected returns (Part 1) and covariance panels (Part 2), builds five
+long-only portfolios per rebalancing month, and writes weights for Part 4.
 """
 
 from __future__ import annotations
@@ -41,9 +16,9 @@ import numpy as np
 import pandas as pd
 from scipy.optimize import minimize
 
-from sta4020_project.cli import monthly_risk_free
-from sta4020_project.risk import monthly_panel
-from sta4020_project.tradability import load_eligibility
+from sta4020_project.shared.contracts import Paths, read_covariance_panel, read_wide
+from sta4020_project.shared.market_data import monthly_panel, monthly_risk_free
+from sta4020_project.shared.tradability import load_eligibility
 
 # =====================================
 # 1. DEFAULTS
@@ -66,16 +41,15 @@ MODELS = (
 
 
 def default_expected_returns() -> Path:
-    """Use the current Part 1 main forecast, as Part 4 does."""
-    return PROJECT / "artifacts" / "part1" / "P1_Expected_Returns.csv"
+    return Paths(PROJECT).expected_returns
 
 
 def default_covariance() -> Path:
-    return PROJECT / "artifacts" / "part2" / "P2_Covariance.csv"
+    return Paths(PROJECT).covariance
 
 
 def default_actual_returns() -> Path:
-    return PROJECT / "artifacts" / "part1" / "Actual_Returns.csv"
+    return Paths(PROJECT).actual_returns
 
 
 def default_output_dir() -> Path:
@@ -91,27 +65,15 @@ def load_panel(path: Path, label: str) -> pd.DataFrame:
     path = Path(path)
     if not path.exists():
         raise FileNotFoundError(f"{label} not found: {path}")
-    frame = pd.read_csv(path)
-    if "Date" not in frame.columns:
-        raise ValueError(f"{label} has no Date column: {path}")
-    frame["Date"] = pd.to_datetime(frame["Date"])
-    return frame.set_index("Date").sort_index().astype(float)
+    return read_wide(path, label=label)
 
 
-def load_covariance(path: Path) -> pd.DataFrame:
+def load_covariance(path: Path, assets: list[str] | None = None) -> dict[pd.Timestamp, np.ndarray]:
+    """Load long covariance CSV into an O(1) {origin: (N, N) ndarray} map."""
     path = Path(path)
     if not path.exists():
         raise FileNotFoundError(f"covariance panel not found: {path}")
-    frame = pd.read_csv(path)
-    required = {"Date", "Asset_1", "Asset_2", "Covariance"}
-    missing = required - set(frame.columns)
-    if missing:
-        raise ValueError(f"covariance panel is missing columns {sorted(missing)}: {path}")
-    frame["Date"] = pd.to_datetime(frame["Date"])
-    frame["Asset_1"] = frame["Asset_1"].astype(str).str.strip()
-    frame["Asset_2"] = frame["Asset_2"].astype(str).str.strip()
-    frame["Covariance"] = pd.to_numeric(frame["Covariance"], errors="raise")
-    return frame
+    return read_covariance_panel(path, assets=assets)
 
 
 # =====================================
@@ -119,29 +81,47 @@ def load_covariance(path: Path) -> pd.DataFrame:
 # =====================================
 
 
-def covariance_at(covariance: pd.DataFrame, date, assets: list[str]) -> np.ndarray:
-    """Rebuild the N x N matrix for one origin date, symmetric and PSD-floored."""
-    frame = covariance[covariance["Date"] == date]
-    if frame.empty:
-        raise ValueError(f"no covariance rows for {date}")
-
-    sigma = frame.pivot_table(
-        index="Asset_1", columns="Asset_2", values="Covariance", aggfunc="first"
-    ).reindex(index=assets, columns=assets).to_numpy(dtype=float)
-
-    if np.isnan(sigma).any():
-        missing = [asset for asset in assets if np.isnan(sigma[assets.index(asset)]).any()]
-        raise ValueError(f"incomplete covariance matrix at {date} for {missing[:5]}")
-
+def floor_covariance(sigma: np.ndarray, date) -> np.ndarray:
+    """Symmetrize and floor eigenvalues at 1e-10 for numerical optimization."""
     if not np.allclose(sigma, sigma.T, rtol=0.0, atol=1e-12):
         sigma = (sigma + sigma.T) / 2
-
     eigenvalues, eigenvectors = np.linalg.eigh(sigma)
     if (eigenvalues < -1e-8).any():
         warnings.warn(f"{date}: covariance has a negative eigenvalue "
                       f"{eigenvalues.min():.3e}; flooring it")
-    sigma = eigenvectors @ np.diag(np.maximum(eigenvalues, 1e-10)) @ eigenvectors.T
-    return sigma
+    return eigenvectors @ np.diag(np.maximum(eigenvalues, 1e-10)) @ eigenvectors.T
+
+
+def covariance_at(
+    covariance: dict[pd.Timestamp, np.ndarray] | pd.DataFrame,
+    date,
+    assets: list[str],
+    *,
+    panel_assets: list[str] | None = None,
+) -> np.ndarray:
+    """Extract the symmetric PSD-floored covariance submatrix for one origin date."""
+    if isinstance(covariance, dict):
+        if date not in covariance:
+            raise ValueError(f"no covariance rows for {date}")
+        matrix = covariance[date]
+        if panel_assets is not None and assets != panel_assets:
+            index_map = {asset: idx for idx, asset in enumerate(panel_assets)}
+            positions = [index_map[asset] for asset in assets]
+            matrix = matrix[np.ix_(positions, positions)]
+        if np.isnan(matrix).any():
+            raise ValueError(f"incomplete covariance matrix at {date}")
+        return floor_covariance(matrix, date)
+
+    frame = covariance[covariance["Date"] == date]
+    if frame.empty:
+        raise ValueError(f"no covariance rows for {date}")
+    sigma = frame.pivot_table(
+        index="Asset_1", columns="Asset_2", values="Covariance", aggfunc="first"
+    ).reindex(index=assets, columns=assets).to_numpy(dtype=float)
+    if np.isnan(sigma).any():
+        missing = [asset for asset in assets if np.isnan(sigma[assets.index(asset)]).any()]
+        raise ValueError(f"incomplete covariance matrix at {date} for {missing[:5]}")
+    return floor_covariance(sigma, date)
 
 
 # =====================================
@@ -255,7 +235,7 @@ def performance_summary(returns, *, periods_per_year: int = PERIODS_PER_YEAR,
 
 
 def build_portfolios(expected: pd.DataFrame, actual: pd.DataFrame,
-                     covariance: pd.DataFrame, *,
+                     covariance: dict[pd.Timestamp, np.ndarray] | pd.DataFrame, *,
                      risk_aversion: float = RISK_AVERSION,
                      max_weight: float | None = MAX_WEIGHT,
                      eligibility: pd.DataFrame | None = None,
@@ -268,6 +248,18 @@ def build_portfolios(expected: pd.DataFrame, actual: pd.DataFrame,
     expected = expected[assets]
     actual = actual[assets]
 
+    # Pre-index DataFrame covariance once for O(1) lookup per origin.
+    cov_panel: dict[pd.Timestamp, np.ndarray] | pd.DataFrame = covariance
+    panel_assets: list[str] | None = assets
+    if isinstance(covariance, pd.DataFrame):
+        grouped = {}
+        for origin, block in covariance.groupby("Date", sort=False):
+            matrix = block.pivot_table(
+                index="Asset_1", columns="Asset_2", values="Covariance", aggfunc="first"
+            ).reindex(index=assets, columns=assets).to_numpy(dtype=float)
+            grouped[origin] = matrix
+        cov_panel = grouped
+
     weight_records, return_records, forecast_records = [], [], []
 
     for date, mu in expected.iterrows():
@@ -279,7 +271,7 @@ def build_portfolios(expected: pd.DataFrame, actual: pd.DataFrame,
             if not active or (max_weight is not None and len(active) * max_weight < 1 - 1e-12):
                 raise ValueError(f"weight constraints are infeasible for {len(active)} eligible assets")
             mu = mu[active]
-            sigma = covariance_at(covariance, date, active)
+            sigma = covariance_at(cov_panel, date, active, panel_assets=panel_assets)
             prior_weights = None
             if market_caps is not None:
                 caps = market_caps.loc[date, active].to_numpy(dtype=float)
@@ -288,7 +280,7 @@ def build_portfolios(expected: pd.DataFrame, actual: pd.DataFrame,
                 prior_weights = caps / caps.sum()
             rf = origin_risk_free.loc[date] if isinstance(origin_risk_free, pd.Series) else origin_risk_free
             bl_mu = black_litterman(mu, sigma, risk_aversion=risk_aversion,
-                                     market_weights=prior_weights, risk_free=rf)
+                                    market_weights=prior_weights, risk_free=rf)
 
             portfolios = {
                 "Mean-Variance Optimization":
@@ -367,6 +359,57 @@ def write_outputs(output_dir: Path, weights_df: pd.DataFrame,
     return written
 
 
+def run_part3(
+    expected_path: Path,
+    covariance_path: Path,
+    actual_path: Path,
+    output_dir: Path,
+    *,
+    risk_aversion: float = RISK_AVERSION,
+    max_weight: float | None = MAX_WEIGHT,
+    tradability_data: Path | None = None,
+    market_caps_path: Path | None = None,
+    risk_free_path: Path | None = None,
+    covariance_panel: dict[pd.Timestamp, np.ndarray] | None = None,
+    eligibility: pd.DataFrame | None = None,
+    market_caps: pd.DataFrame | None = None,
+    origin_risk_free: pd.Series | float | None = None,
+) -> dict[str, Path]:
+    """In-process entry point that preserves the exact Part 3 CSV output contract."""
+    expected = load_panel(expected_path, "expected returns")
+    actual = load_panel(actual_path, "actual returns")
+    assets = sorted(set(expected.columns) & set(actual.columns))
+    covariance = (
+        covariance_panel
+        if covariance_panel is not None
+        else load_covariance(covariance_path, assets=assets)
+    )
+    if eligibility is None and tradability_data is not None:
+        eligibility = load_eligibility(tradability_data, expected.index, assets)
+    if market_caps is None and market_caps_path is not None:
+        market_caps = monthly_panel(pd.read_pickle(market_caps_path), expected.index, assets)
+    if origin_risk_free is None:
+        origin_risk_free = monthly_risk_free(risk_free_path, expected.index)
+        if risk_free_path is not None and not isinstance(origin_risk_free, pd.Series):
+            raise ValueError("valid daily risk-free data is required when risk_free_path is specified")
+
+    weights_df, returns_df, forecasts_df = build_portfolios(
+        expected, actual, covariance,
+        risk_aversion=risk_aversion,
+        max_weight=max_weight,
+        eligibility=eligibility,
+        market_caps=market_caps,
+        origin_risk_free=origin_risk_free,
+    )
+    written = write_outputs(output_dir, weights_df, returns_df, forecasts_df)
+    if eligibility is not None:
+        dropped = len(assets) - eligibility.sum(axis=1)
+        diag_path = Path(output_dir) / "Tradability_Diagnostics.csv"
+        dropped.rename("Excluded_Assets").rename_axis("Date").to_csv(diag_path)
+        written["tradability"] = diag_path
+    return written
+
+
 # =====================================
 # 8. COMMAND LINE
 # =====================================
@@ -409,7 +452,8 @@ def main(argv=None) -> int:
     try:
         expected = load_panel(arguments.expected, "expected returns")
         actual = load_panel(arguments.actual, "actual returns")
-        covariance = load_covariance(arguments.covariance)
+        assets = sorted(set(expected.columns) & set(actual.columns))
+        covariance = load_covariance(arguments.covariance, assets=assets)
     except (FileNotFoundError, ValueError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 2
@@ -424,11 +468,10 @@ def main(argv=None) -> int:
             data_dir = PROJECT / "data"
         eligibility = None
         if data_dir is not None:
-            assets = sorted(set(expected.columns) & set(actual.columns))
             eligibility = load_eligibility(data_dir, expected.index, assets)
             dropped = len(assets) - eligibility.sum(axis=1)
             print(f"excluded assets per origin: min={dropped.min()} max={dropped.max()}")
-        market_caps = (monthly_panel(pd.read_pickle(arguments.market_caps), expected.index, expected.columns)
+        market_caps = (monthly_panel(pd.read_pickle(arguments.market_caps), expected.index, assets)
                        if arguments.market_caps is not None else None)
         origin_risk_free = monthly_risk_free(arguments.risk_free_data, expected.index)
         if arguments.risk_free_data is not None and not isinstance(origin_risk_free, pd.Series):
@@ -443,7 +486,6 @@ def main(argv=None) -> int:
         print(f"error: {error}", file=sys.stderr)
         return 1
 
-    assets = sorted(weights_df["Asset"].unique())
     months = weights_df["Date"].nunique()
     print(f"\nPortfolio construction completed: {months} rebalancing months, "
           f"{len(assets)} assets, {len(MODELS)} methods")
@@ -456,8 +498,7 @@ def main(argv=None) -> int:
         )
         for model, group in returns_df.groupby("Model")
     }).T
-    print("\nUncosted summary (for sanity only; the reference numbers are in the "
-          "Part 4 report):")
+    print("\nUncosted summary (sanity check; formal metrics live in Part 4):")
     print(summary.round(4).to_string())
 
     written = write_outputs(arguments.output_dir, weights_df, returns_df, forecasts_df)

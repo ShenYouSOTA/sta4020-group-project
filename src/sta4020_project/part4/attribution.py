@@ -10,10 +10,6 @@ out and the gap splits exactly into
 
     signal = sum_i (w_i - e_i) * (mu_i - mean(mu))      forecast capture
     timing = sum_i (w_i - e_i) * ((r_i - mean(r)) - (mu_i - mean(mu)))
-
-Signal is the forecast return associated with the tilts. Timing is the residual
-from realised returns differing from the forecast. Both are measured
-in the same units as the portfolio return, so they add up to the gap.
 """
 
 from __future__ import annotations
@@ -21,7 +17,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from .contracts import DATE
+from ..shared.contracts import DATE
 
 
 def decompose(weights: pd.DataFrame, expected: pd.DataFrame, realised: pd.DataFrame,
@@ -55,7 +51,7 @@ def decompose(weights: pd.DataFrame, expected: pd.DataFrame, realised: pd.DataFr
         })
     frame = pd.DataFrame(rows).set_index("realised_date").sort_index()
     if not np.allclose(frame["gap"], frame["signal"] + frame["timing"], atol=1e-12):
-        raise AssertionError("gap decomposition does not add up")
+        raise ValueError("gap decomposition does not add up")
     return frame
 
 

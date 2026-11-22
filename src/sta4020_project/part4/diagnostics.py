@@ -1,25 +1,27 @@
 """Matched forecast, calibration and attribution tables for the final runs."""
 
+from __future__ import annotations
+
 import numpy as np
 import pandas as pd
 from scipy.stats import chi2
 
-from .cli import BENCHMARK, monthly_risk_free
-from .contracts import read_covariance_panel, read_wide, target_dates
+from ..shared.contracts import read_covariance_panel, read_wide, target_dates
+from ..shared.market_data import monthly_risk_free
+from ..shared.tradability import DELISTED_ASSET, DELISTED_FROM, load_eligibility
+from .cli import BENCHMARK
 from .metrics import summary as performance_summary
 from .stats import circular_block_bootstrap_mean, hac_regression, newey_west_tstat
-from .styles import STYLES
-from .tradability import DELISTED_ASSET, DELISTED_FROM, load_eligibility
 
 MVO = "Mean-Variance Optimization"
 BL = "Black-Litterman"
 
 
-def table(report, name):
+def table(report, name: str) -> pd.DataFrame:
     return pd.read_csv(report / "tables" / f"{name}.csv", index_col=0)
 
 
-def prediction_comparison(expected_dir, actual, data, origins, output):
+def prediction_comparison(expected_dir, actual, data, origins, output) -> dict:
     raw = pd.read_csv(expected_dir / "descriptor_coverage.csv", index_col="Formation")
     coverage = raw.drop(columns=["DescriptorMonth", "Eligible"]).mean(axis=1)
     coverage.index = pd.PeriodIndex(coverage.index, freq="M")
@@ -57,7 +59,7 @@ def prediction_comparison(expected_dir, actual, data, origins, output):
     return selection
 
 
-def high_coverage_portfolios(reports, data, output):
+def high_coverage_portfolios(reports, data, output) -> list[int]:
     """Evaluate the existing weight paths in years with median coverage or better."""
     coverage = pd.read_csv(output / "monthly_ic.csv", index_col=0, parse_dates=True)
     coverage.index = coverage.index + pd.offsets.MonthEnd()
@@ -77,7 +79,7 @@ def high_coverage_portfolios(reports, data, output):
     return [int(year) for year in annual.index[chosen]]
 
 
-def executed(report, model, origins, assets):
+def executed(report, model: str, origins, assets) -> np.ndarray:
     weights = read_wide(report / "tables" / f"executed_{model.replace('/', '_')}.csv")
     if not weights.index.equals(origins) or set(weights.columns) != set(assets):
         raise ValueError(f"{model}: executed weights do not match the common calendar and assets")
@@ -87,7 +89,7 @@ def executed(report, model, origins, assets):
     return values
 
 
-def calibration(variance, realised, rf):
+def calibration(variance, realised, rf) -> dict:
     squared = (realised - rf) ** 2
     normalized_error = squared / variance - 1
     fit, _, covariance = hac_regression(np.column_stack([np.ones(len(variance)), variance]), squared)
@@ -110,7 +112,7 @@ def calibration(variance, realised, rf):
     }
 
 
-def risk_comparison(risk_runs, final_report, expected, actual, data, output):
+def risk_comparison(risk_runs, final_report, expected, actual, data, output) -> None:
     origins, assets = expected.index, expected.columns.tolist()
     mapping = target_dates(origins, actual.index)
     outcomes = actual.loc[mapping, assets].to_numpy()
@@ -136,8 +138,8 @@ def risk_comparison(risk_runs, final_report, expected, actual, data, output):
         })
         for model in table(report, "performance_summary").index:
             weights = executed(report, model, origins, assets)
-            if model == BENCHMARK:
-                np.testing.assert_allclose(weights, reference, atol=1e-12)
+            if model == BENCHMARK and not np.allclose(weights, reference, atol=1e-12):
+                raise ValueError(f"{method}: executed 1/N weights diverge from final reference path")
             variance = np.einsum("ti,tij,tj->t", weights, covariance, weights)
             realised = (weights * outcomes).sum(axis=1)
             rows.append({"method": method, "model": model, **calibration(variance, realised, rf)})
@@ -145,7 +147,7 @@ def risk_comparison(risk_runs, final_report, expected, actual, data, output):
     pd.DataFrame(diagnostics).to_csv(output / "covariance_diagnostics.csv", index=False)
 
 
-def final_attribution(path, report, expected, actual, output):
+def final_attribution(path, report, expected, actual, output) -> None:
     origins, assets = expected.index, expected.columns.tolist()
     mapping = target_dates(origins, actual.index)
     outcomes = actual.loc[mapping, assets].to_numpy()
@@ -156,8 +158,11 @@ def final_attribution(path, report, expected, actual, output):
         exposures = bundle["exposures"][:, positions]
         factor_covariances = bundle["factor_covariances"]
         specific = bundle["specific_variances"][:, positions]
-    factors = pd.read_csv(path.with_suffix(".factors.csv"), index_col=0, parse_dates=True).loc[mapping]
-    factors = factors[["market", *STYLES]]
+    raw_factors = pd.read_csv(path.with_suffix(".factors.csv"), index_col=0, parse_dates=True).loc[mapping]
+    style_names = [col for col in raw_factors.columns if col not in {"market", "industry"}]
+    if not style_names or "market" not in raw_factors.columns:
+        raise ValueError("factors.csv must contain 'market' and style factor columns")
+    factors = raw_factors[["market", *style_names]]
     factor_matrix = factors.to_numpy()
     design = np.column_stack([np.ones(len(factors)), factor_matrix])
     benchmark = (executed(report, BENCHMARK, origins, assets) * outcomes).sum(axis=1)
@@ -182,7 +187,8 @@ def final_attribution(path, report, expected, actual, output):
         active = gross - benchmark
         fit, _, covariance = hac_regression(design, active)
         contributions = 12 * fit * np.r_[1, factor_matrix.mean(axis=0)]
-        np.testing.assert_allclose(contributions.sum(), 12 * active.mean(), atol=1e-12)
+        if not np.allclose(contributions.sum(), 12 * active.mean(), atol=1e-12):
+            raise ValueError(f"{model}: style attribution contributions do not sum to active mean")
         for name, coefficient, contribution, se in zip(
             ["intercept", *factors.columns], fit, contributions, np.sqrt(np.diag(covariance)), strict=True,
         ):
@@ -206,5 +212,6 @@ def final_attribution(path, report, expected, actual, output):
         correlation = np.corrcoef(matrix, rowvar=False)
         paired.append(np.abs(correlation))
         vif.append(np.diag(np.linalg.inv(correlation)))
-    pd.DataFrame(np.median(paired, axis=0), index=STYLES, columns=STYLES).to_csv(output / "style_correlations.csv")
-    pd.DataFrame(vif, index=origins, columns=STYLES).to_csv(output / "style_vif.csv")
+    pd.DataFrame(np.median(paired, axis=0), index=style_names, columns=style_names).to_csv(
+        output / "style_correlations.csv")
+    pd.DataFrame(vif, index=origins, columns=style_names).to_csv(output / "style_vif.csv")

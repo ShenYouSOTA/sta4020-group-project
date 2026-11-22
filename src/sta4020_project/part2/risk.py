@@ -1,5 +1,7 @@
 """Build monthly covariance forecasts against the Part 1 calendar."""
 
+from __future__ import annotations
+
 import argparse
 from pathlib import Path
 from tempfile import NamedTemporaryFile
@@ -7,20 +9,12 @@ from tempfile import NamedTemporaryFile
 import numpy as np
 import pandas as pd
 
-from .contracts import Paths, read_wide
-from .tradability import DELISTED_ASSET, DELISTED_FROM
+from ..shared.contracts import Paths, read_wide
+from ..shared.market_data import monthly_panel
+from ..shared.tradability import DELISTED_ASSET, DELISTED_FROM
 
 
-def monthly_panel(frame, dates, assets):
-    """Align trading-day and calendar month-ends without changing asset order."""
-    frame = frame.copy()
-    frame.index = pd.DatetimeIndex(frame.index).to_period("M")
-    result = frame.reindex(index=dates.to_period("M"), columns=assets)
-    result.index = dates
-    return result
-
-
-def sample_covariances(returns, origins, *, shrink=False):
+def sample_covariances(returns: pd.DataFrame, origins, *, shrink: bool = False):
     """Use each expanding history and carry the delisted asset's last risk."""
     for origin in origins:
         history = returns.loc[:origin]
@@ -43,7 +37,7 @@ def sample_covariances(returns, origins, *, shrink=False):
             yield restore_delisted_asset(covariance, history.columns, frozen)
 
 
-def restore_delisted_asset(active_covariance, assets, frozen_variance):
+def restore_delisted_asset(active_covariance: np.ndarray, assets: pd.Index, frozen_variance: float) -> np.ndarray:
     """Keep the delisted name in the contract with a frozen standalone variance."""
     active = np.asarray(assets != DELISTED_ASSET)
     matrix = np.zeros((len(assets), len(assets)))
@@ -53,7 +47,7 @@ def restore_delisted_asset(active_covariance, assets, frozen_variance):
     return matrix
 
 
-def write_covariances(path, origins, assets, matrices):
+def write_covariances(path: Path, origins, assets, matrices) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     keys = pd.MultiIndex.from_product([assets, assets], names=["Asset_1", "Asset_2"])
     temporary_path = None
@@ -75,7 +69,7 @@ def write_covariances(path, origins, assets, matrices):
             temporary_path.unlink(missing_ok=True)
 
 
-def main(argv=None):
+def main(argv=None) -> int:
     paths = Paths()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--expected", type=Path, default=paths.expected_returns)

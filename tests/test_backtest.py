@@ -3,6 +3,7 @@ import pandas as pd
 import pytest
 
 from sta4020_project import backtest, contracts
+from sta4020_project.part4.backtest import ExecutionMode, execute_rebalance
 
 
 def panel(values, dates, assets):
@@ -29,8 +30,8 @@ def test_transaction_costs_are_charged_on_the_traded_notional():
     result = backtest.run_backtest(weights, realised, mapping, cost_bps=100.0)
     first = result.returns.iloc[0]
     second = result.returns.iloc[1]
-    assert first == pytest.approx(-0.01)          # full purchase from cash, 100bp
-    assert second == pytest.approx(-0.005)        # half the book traded, 100bp
+    assert first == pytest.approx(-0.01)
+    assert second == pytest.approx(-0.005)
 
 
 def test_equal_weight_benchmark_has_uniform_weights():
@@ -69,8 +70,6 @@ def test_backtest_rejects_weights_that_do_not_sum_to_one():
 
 
 def test_frozen_execution_funds_both_sides_and_preserves_old_holding():
-    from sta4020_project.backtest import execute_rebalance
-
     previous = np.array([0.30, 0.70, 0.0])
     target = np.array([0.0, 0.0, 1.0])
     rates = 0.001
@@ -87,7 +86,23 @@ def test_frozen_execution_charges_initial_purchase_and_next_month_returns():
     target = pd.DataFrame([[1.0, 0.0], [0.0, 1.0]], index=dates[:2], columns=["A", "B"])
     realised = pd.DataFrame([[0.20, 0.0], [0.10, -0.30]], index=dates[1:], columns=target.columns)
     blocked = pd.DataFrame([[False, False], [True, False]], index=dates[:2], columns=target.columns)
-    result = backtest.run_backtest(target, realised, pd.Series(dates[1:], index=dates[:2]),
-                          cost_bps=10, suspensions=blocked)
+    result = backtest.run_backtest(
+        target, realised, pd.Series(dates[1:], index=dates[:2]),
+        cost_bps=10, suspensions=blocked, execution_mode=ExecutionMode.FROZEN_PER_SIDE,
+    )
     np.testing.assert_allclose(result.returns, [1.20 / 1.001 - 1, 0.10])
     np.testing.assert_allclose(result.weights, [[1.0, 0.0], [1.0, 0.0]])
+
+
+def test_immediate_per_side_mode_requires_no_dummy_suspensions():
+    dates = pd.date_range("2023-01-01", periods=3, freq="ME")
+    target = pd.DataFrame([[1.0, 0.0], [0.0, 1.0]], index=dates[:2], columns=["A", "B"])
+    realised = pd.DataFrame([[0.20, 0.0], [0.10, -0.30]], index=dates[1:], columns=target.columns)
+    mapping = pd.Series(dates[1:], index=dates[:2])
+    explicit = backtest.run_backtest(
+        target, realised, mapping, cost_bps=10, execution_mode=ExecutionMode.IMMEDIATE_PER_SIDE
+    )
+    all_false = pd.DataFrame(False, index=dates[:2], columns=target.columns)
+    legacy_style = backtest.run_backtest(target, realised, mapping, cost_bps=10, suspensions=all_false)
+    np.testing.assert_allclose(explicit.returns, legacy_style.returns)
+    np.testing.assert_allclose(explicit.weights, legacy_style.weights)

@@ -1,30 +1,31 @@
-"""Shared and Part 4 code for the STA4020 final project."""
+"""STA4020 final project: shared kernel, Part 1/2/4 domains, and pipeline orchestration."""
 
-from .contracts import (
+from .part4 import attribution, backtest, metrics, report, stats
+from .shared import contracts
+from .shared.contracts import (
     DEFAULT_EXPECTED_VARIANT,
     MIN_ASSETS,
     PERIODS_PER_YEAR,
     Paths,
     audit,
-    resolve_expected_returns,
     project_root,
     read_actual,
     read_covariance_panel,
     read_expected,
     read_universe,
     read_weights,
+    resolve_expected_returns,
     target_dates,
     weights_to_wide,
 )
-from . import attribution, backtest, contracts, metrics, report, stats
 
 __all__ = [
     "DEFAULT_EXPECTED_VARIANT",
     "MIN_ASSETS",
     "PERIODS_PER_YEAR",
     "Paths",
-    "audit",
     "attribution",
+    "audit",
     "backtest",
     "contracts",
     "metrics",

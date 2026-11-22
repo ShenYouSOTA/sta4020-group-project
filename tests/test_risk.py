@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from sta4020_project.risk import sample_covariances
+from sta4020_project.part2.risk import sample_covariances
 
 
 def test_sample_covariance_freezes_delisted_risk():
@@ -19,7 +19,7 @@ def test_sample_covariance_freezes_delisted_risk():
 
 def test_factor_covariance_ignores_future_rows():
     factor_model = pytest.importorskip("risk_model.factor_model")
-    from sta4020_project.styles import factor_covariances
+    from sta4020_project.part2.styles import factor_covariances
 
     rng = np.random.default_rng(42)
     dates = pd.date_range("2022-01-01", periods=20, freq="ME")
@@ -42,7 +42,7 @@ def test_factor_covariance_ignores_future_rows():
 
 def test_broad_forecast_ignores_next_realization_and_future_styles():
     pytest.importorskip("risk_model.factor_model")
-    from sta4020_project.broad_risk import estimate_history, forecast_components
+    from sta4020_project.part2.broad_risk import estimate_history, forecast_components
 
     rng = np.random.default_rng(42)
     dates = pd.date_range("2008-01-01", periods=12, freq="ME")
@@ -60,5 +60,7 @@ def test_broad_forecast_ignores_next_realization_and_future_styles():
     for old, new in zip(next(forecast_components(history, dates[[7]])),
                         next(forecast_components(changed, dates[[7]])), strict=True):
         np.testing.assert_allclose(old, new)
-    pd.testing.assert_series_equal(history.coverage.iloc[7][["Formation", "Realization"]],
-                                   pd.Series([dates[7], dates[8]], index=["Formation", "Realization"], name=7, dtype=object))
+    pd.testing.assert_series_equal(
+        history.coverage.iloc[7][["Formation", "Realization"]],
+        pd.Series([dates[7], dates[8]], index=["Formation", "Realization"], name=7, dtype=object),
+    )

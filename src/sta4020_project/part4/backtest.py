@@ -1,21 +1,23 @@
-"""Out-of-sample backtest engine.
-
-Inputs are the Part 1 realised returns and the Part 3 weight file.  For every
-forecast origin we look up the realised month it is predicting, apply the
-target weights, deduct proportional transaction costs on the traded amount and
-compound.  The 1/N benchmark is generated here so that portfolio and benchmark
-always see exactly the same universe, calendar and cost model.
-"""
+"""Out-of-sample backtest engine with explicit execution modes."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import StrEnum
 
 import numpy as np
 import pandas as pd
 from scipy.optimize import brentq
 
 from . import metrics as metric
+
+
+class ExecutionMode(StrEnum):
+    """How monthly rebalances handle trading restrictions and transaction costs."""
+
+    LEGACY_HALF_L1 = "legacy_half_l1"
+    IMMEDIATE_PER_SIDE = "immediate_per_side"
+    FROZEN_PER_SIDE = "frozen_per_side"
 
 
 @dataclass
@@ -61,18 +63,26 @@ def execute_rebalance(target, previous, suspended, cost_rate):
     return (frozen + target * (budget - fee)) / (1.0 - fee), turnover(fee), fee
 
 
+def _resolve_execution_mode(
+    execution_mode: ExecutionMode | None,
+    suspensions: pd.DataFrame | None,
+) -> ExecutionMode:
+    if execution_mode is not None:
+        if execution_mode == ExecutionMode.FROZEN_PER_SIDE and suspensions is None:
+            raise ValueError("FROZEN_PER_SIDE execution requires a suspensions mask")
+        return execution_mode
+    return ExecutionMode.FROZEN_PER_SIDE if suspensions is not None else ExecutionMode.LEGACY_HALF_L1
+
+
 def run_backtest(weights: pd.DataFrame, realised: pd.DataFrame, mapping: pd.Series,
                  *, name: str = "", cost_bps: float = 0.0,
-                 suspensions: pd.DataFrame | None = None) -> BacktestResult:
-    """Simulate one weight path.
-
-    weights   : origin x asset target weights (already long-only, sum to one)
-    realised  : month-end x asset realised simple returns
-    mapping   : origin -> realised date (see contracts.target_dates)
-    cost_bps  : one-way cost in basis points applied to traded notional
-    """
+                 suspensions: pd.DataFrame | None = None,
+                 execution_mode: ExecutionMode | None = None) -> BacktestResult:
+    """Simulate one weight path."""
+    mode = _resolve_execution_mode(execution_mode, suspensions)
     assets = list(realised.columns)
     weights = weights.reindex(columns=assets).sort_index()
+    no_blocks = np.zeros(len(assets), dtype=bool)
 
     rows, executed = [], []
     drifted_weights = None
@@ -93,9 +103,13 @@ def run_backtest(weights: pd.DataFrame, realised: pd.DataFrame, mapping: pd.Seri
         if not np.isfinite(r).all():
             raise ValueError(f"{target.date()}: realised returns contain NaN")
 
-        if suspensions is not None:
+        if mode in (ExecutionMode.FROZEN_PER_SIDE, ExecutionMode.IMMEDIATE_PER_SIDE):
             previous = np.zeros_like(w) if drifted_weights is None else drifted_weights
-            blocked = suspensions.loc[origin, assets].to_numpy(dtype=bool)
+            blocked = (
+                suspensions.loc[origin, assets].to_numpy(dtype=bool)
+                if mode == ExecutionMode.FROZEN_PER_SIDE
+                else no_blocks
+            )
             w, traded, cost = execute_rebalance(w, previous, blocked, cost_bps / 1e4)
             gross = float(w @ r)
             net = (1.0 - cost) * (1.0 + gross) - 1.0
@@ -140,10 +154,14 @@ def run_backtest(weights: pd.DataFrame, realised: pd.DataFrame, mapping: pd.Seri
 def run_models(weight_panels: dict[str, pd.DataFrame], realised: pd.DataFrame, mapping: pd.Series,
                *, cost_bps: float = 0.0, benchmark: str = "1/N",
                eligibility: pd.DataFrame | None = None,
-               suspensions: pd.DataFrame | None = None) -> dict[str, BacktestResult]:
+               suspensions: pd.DataFrame | None = None,
+               execution_mode: ExecutionMode | None = None) -> dict[str, BacktestResult]:
     """Backtest every model in the Part 3 weight file plus the 1/N benchmark."""
     results = {
-        name: run_backtest(panel, realised, mapping, name=name, cost_bps=cost_bps, suspensions=suspensions)
+        name: run_backtest(
+            panel, realised, mapping, name=name, cost_bps=cost_bps,
+            suspensions=suspensions, execution_mode=execution_mode,
+        )
         for name, panel in weight_panels.items()
     }
     origins = pd.DatetimeIndex(sorted(set().union(*(panel.index for panel in weight_panels.values()))))
@@ -151,7 +169,10 @@ def run_models(weight_panels: dict[str, pd.DataFrame], realised: pd.DataFrame, m
     if eligibility is not None:
         eligible = eligibility.loc[origins, realised.columns]
         benchmark_weights = eligible.div(eligible.sum(axis=1), axis=0)
-    results[benchmark] = run_backtest(benchmark_weights, realised, mapping, name=benchmark, cost_bps=cost_bps, suspensions=suspensions)
+    results[benchmark] = run_backtest(
+        benchmark_weights, realised, mapping, name=benchmark, cost_bps=cost_bps,
+        suspensions=suspensions, execution_mode=execution_mode,
+    )
     return results
 
 
