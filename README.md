@@ -1,103 +1,210 @@
+<div align="center">
+
 # STA4020 Final Project
+
+**Forecasting and Allocating Across 50 China A-Shares (Jan 2015 – Aug 2024)**
 
 English | [简体中文](README.zh-CN.md)
 
-Four-part quantitative equity project: return forecasting (Part 1), risk modeling (Part 2), portfolio construction (Part 3), and out-of-sample evaluation (Part 4). Each part represents 25% individual work; the final slides and report are graded as a group.
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-17465a?logo=python&logoColor=white)](pyproject.toml)
+[![uv](https://img.shields.io/badge/env-uv-6e40c9)](https://docs.astral.sh/uv/)
+[![Typst](https://img.shields.io/badge/docs-Typst-239dad)](docs/final_report.typ)
+[![OOS Window](https://img.shields.io/badge/OOS-116%20months%20%7C%2050%20stocks-2e7d32)](#key-results)
+[![Tests](https://img.shields.io/badge/tests-96%20passed-2e7d32)](tests/)
 
-See [docs/PLAN.md](docs/PLAN.md) for deadlines, artifact contracts, work breakdown, and risks. Run all commands from the repository root; all code resolves paths relative to it.
+[Deliverables & Previews](#deliverables--previews) · [Key Results](#key-results) · [Architecture](#architecture) · [Quick Start](#quick-start) · [Reproduce Final](#reproduce-final-experiment) · [TODO](#todo--known-issues)
 
-## Requirements & Setup
+</div>
 
-- [uv](https://docs.astral.sh/uv/) (automatically provisions Python ≥ 3.11 and syncs `uv.lock`).
-- Update dependencies via `uv add` or `uv lock`.
+---
 
-~~~bash
-uv sync    # optional; `uv run` syncs automatically
-~~~
+End-to-end monthly quantitative equity pipeline built for **CUHK-Shenzhen STA4020**: return forecasting (**Part 1**), Barra-style risk modeling (**Part 2**), constrained portfolio construction (**Part 3**), and out-of-sample evaluation with statistical inference and attribution (**Part 4**).
+
+## Deliverables & Previews
+
+Click either thumbnail or link below to view the compiled PDFs directly in GitHub's PDF viewer:
+
+| Deliverable | Direct Preview (PDF) | Source (Typst) | Notes |
+| --- | --- | --- | --- |
+| **Final Report** | [Final_Report.pdf](docs/deliverables/Final_Report.pdf) | [final_report.typ](docs/final_report.typ) | 5 chapters, tables & figures bound to `manifest.json` |
+| **Presentation Slides** | [Final_Slides.pdf](docs/deliverables/Final_Slides.pdf) | [final_slides.typ](docs/final_slides.typ) | 8-slide 16:9 deck covering Parts 1–4 |
+| **Experiment Design** | [FINAL_EXPERIMENT_DESIGN.md](docs/FINAL_EXPERIMENT_DESIGN.md) | — | Pre-registered selection, risk & execution rules |
+| **Engineering Plan** | [PLAN.md](docs/PLAN.md) | — | Deadlines, CSV contracts, work breakdown & risks |
+
+<table>
+  <tr>
+    <td width="50%" align="center">
+      <a href="docs/deliverables/Final_Report.pdf">
+        <img src="docs/previews/report_p1.png" alt="Final Report Page 1 Preview" width="96%" />
+      </a>
+      <br />
+      <strong><a href="docs/deliverables/Final_Report.pdf">Open Final Report (PDF)</a></strong>
+    </td>
+    <td width="50%" align="center">
+      <a href="docs/deliverables/Final_Slides.pdf">
+        <img src="docs/previews/slides_p6.png" alt="Final Slides Results Preview" width="96%" />
+      </a>
+      <br />
+      <strong><a href="docs/deliverables/Final_Slides.pdf">Open Presentation Slides (PDF)</a></strong>
+    </td>
+  </tr>
+</table>
+
+<details>
+<summary><strong>Preview all 8 presentation slides inline</strong> (click to expand)</summary>
+
+<br />
+
+<table>
+  <tr>
+    <td width="50%"><a href="docs/deliverables/Final_Slides.pdf"><img src="docs/previews/slides_p1.png" alt="Slide 1" /></a></td>
+    <td width="50%"><a href="docs/deliverables/Final_Slides.pdf"><img src="docs/previews/slides_p2.png" alt="Slide 2" /></a></td>
+  </tr>
+  <tr>
+    <td width="50%"><a href="docs/deliverables/Final_Slides.pdf"><img src="docs/previews/slides_p3.png" alt="Slide 3" /></a></td>
+    <td width="50%"><a href="docs/deliverables/Final_Slides.pdf"><img src="docs/previews/slides_p4.png" alt="Slide 4" /></a></td>
+  </tr>
+  <tr>
+    <td width="50%"><a href="docs/deliverables/Final_Slides.pdf"><img src="docs/previews/slides_p5.png" alt="Slide 5" /></a></td>
+    <td width="50%"><a href="docs/deliverables/Final_Slides.pdf"><img src="docs/previews/slides_p6.png" alt="Slide 6" /></a></td>
+  </tr>
+  <tr>
+    <td width="50%"><a href="docs/deliverables/Final_Slides.pdf"><img src="docs/previews/slides_p7.png" alt="Slide 7" /></a></td>
+    <td width="50%"><a href="docs/deliverables/Final_Slides.pdf"><img src="docs/previews/slides_p8.png" alt="Slide 8" /></a></td>
+  </tr>
+</table>
+
+</details>
+
+## Key Results
+
+Monthly out-of-sample evaluation across **116 realized months** (Jan 2015 – Aug 2024), **50 fixed A-shares**, **10% single-name cap**, **10 bp/side** cash-funded costs, and frozen suspended holdings:
+
+| Strategy | Net Ann. Return | Ann. Volatility | Sharpe Ratio | Max Drawdown | Ann. Turnover |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| **Mean–Variance Optimization** | **11.1%** | 36.4% | **0.408** | -49.3% | 7.91x |
+| **Black–Litterman** | 7.3% | **34.1%** | 0.315 | **-47.2%** | 4.13x |
+| **1/N (Eligible Benchmark)** | 7.3% | 34.4% | 0.315 | -50.5% | 1.01x |
+| **Risk Parity** | 7.0% | 34.3% | 0.307 | -50.3% | **0.89x** |
+| **Global Minimum Variance** | 4.2% | 34.4% | 0.230 | -49.7% | 3.41x |
+| **Maximum Diversification** | -2.4% | 37.0% | 0.059 | -71.9% | 2.41x |
+
+<p align="center">
+  <img src="docs/previews/wealth.png" alt="Out-of-sample cumulative net wealth" width="82%" />
+</p>
+
+## Architecture
+
+The codebase uses a **Shared Kernel + 4 Autonomous Domains** layout enforced by AST import tests ([test_architecture.py](tests/test_architecture.py)). Parts exchange strictly defined CSV contracts and never import each other laterally.
+
+```mermaid
+flowchart TD
+    P["pipeline/ (checks · sample · final)"]
+    P1["Part 1: Return Model<br/>part1_return_model/ · src/.../part1/"]
+    P2["Part 2: Risk Model<br/>part2_risk_model/ · src/.../part2/"]
+    P3["Part 3: Portfolio Construction<br/>part3_portfolio/Part3.py"]
+    P4["Part 4: Evaluation & Attribution<br/>src/.../part4/"]
+    S["shared/ (contracts · market_data · descriptors · tradability · config)"]
+
+    P --> P1 & P2 & P3 & P4
+    P1 & P2 & P3 & P4 --> S
+    P1 -. "P1_Expected_Returns.csv" .-> P3
+    P2 -. "P2_Covariance.csv" .-> P3
+    P3 -. "Portfolio_Weights.csv" .-> P4
+```
+
+### Repository Map
+
+| Path | Role | Owner |
+| --- | --- | --- |
+| `part1_return_model/` | FM & tree notebooks; see [Part 1 guide](part1_return_model/README.md) | Part 1 |
+| `part2_risk_model/` | Vendored Barra-style risk package (`risk_model`); see [PROVENANCE.md](part2_risk_model/PROVENANCE.md) | Part 2 |
+| `part3_portfolio/` | Standalone & in-process portfolio CLI (`Part3.py`); see [Part 3 guide](part3_portfolio/README.md) | Part 3 |
+| `part4_evaluation/` | Tagged evaluation outputs (`tables/`, `figures/`, `REPORT.md`, untracked) | Part 4 |
+| `src/sta4020_project/` | Layered package: `shared/`, `part1/`, `part2/`, `part4/`, `pipeline/` | Shared |
+| `artifacts/` | Cross-part CSV contracts (`part1/`, `part2/`, `part3/`, `sample/`) | Shared |
+| `data/` | Raw course data (~530 MB + 609 MB descriptors, untracked); see [data/README.md](data/README.md) | Shared |
+| `docs/` | Guidelines, plan, Typst sources, compiled PDFs (`deliverables/`) & PNGs (`previews/`) | Shared |
+| `tests/` | Unit & AST architecture tests (96 tests total with `part2_risk_model/tests`) | Shared |
 
 ## Quick Start
 
-~~~bash
-uv run pytest                    # unit tests for shared code
-uv run sta4020-sample            # smoke test on 20-asset, 24-month mock panel -> part4_evaluation/reports/sample/REPORT.md
-uv run sta4020-check-data        # verify raw data files
-uv run sta4020-check-artifacts   # validate Part 1 and Part 2 CSV contracts
-~~~
+Only [uv](https://docs.astral.sh/uv/) is required (automatically provisions Python ≥ 3.11 from `uv.lock`). Run all commands from the repository root:
 
-Reproduce the interim run using Part 1 forecasts and course data (factor risk requires `unzip` with Deflate64 support and ~2.6 GiB temp space):
+```bash
+# 1. Clone and sync locked environment
+git clone https://github.com/ShenYouSOTA/sta4020-group-project.git
+cd sta4020-group-project
+uv sync --locked --extra risk --extra final
 
-~~~bash
-uv run --extra risk sta4020-build-risk --method factor
-uv run python part3_portfolio/Part3.py --max-weight 0.10 --output-dir artifacts/part3/run1
-uv run sta4020-check-artifacts --weights artifacts/part3/run1/Portfolio_Weights.csv
-uv run sta4020-evaluate --tag run1 --cost-bps 10 --weights artifacts/part3/run1/Portfolio_Weights.csv
-~~~
-
-- **Covariance comparison:** rerun `sta4020-build-risk` with `--method sample` or `--method ledoit-wolf` and a distinct `--output`, then pass `--covariance` to Part 3 with a separate output directory and tag.
-- **Tradability:** the main forecast applies local month-end vendor flags in Parts 3 and 4; pass `--tradability-data` to both for custom forecasts.
-- **Cost sensitivity:** `--cost-sweep 0,10,30,50` is enabled by default; pass `--cost-sweep ''` to skip.
-
-## Final Experiment
-
-Run from the repository root with course data in `data/`. The `final` extra includes `h5py` for Part 1 daily features. Pass `--descriptors /path/to/descriptors.pkl` to reuse an extracted copy.
-
-~~~bash
-OPENBLAS_NUM_THREADS=1 uv run --locked --extra risk --extra final python -m sta4020_project.final_pipeline
+# 2. Verify tests and end-to-end mock smoke test (no raw data needed)
 uv run --locked --extra risk --extra final pytest tests part2_risk_model/tests
-typst compile --root . docs/final_report.typ part4_evaluation/reports/final/Final_Report.pdf
-typst compile --root . docs/final_slides.typ part4_evaluation/reports/final/Final_Slides.pdf
-~~~
+uv run sta4020-sample
 
-Use a new tag (e.g. `--tag final-recheck`) for reruns, and pass `--input tag=final-recheck` when compiling Typst. Outputs and manifests live in `part4_evaluation/reports/final/`. See [docs/FINAL_EXPERIMENT_DESIGN.md](docs/FINAL_EXPERIMENT_DESIGN.md) for experiment rules.
+# 3. Copy course data into data/, then verify data and CSV contracts
+uv run sta4020-check-data
+uv run sta4020-check-artifacts
+```
 
-## Raw Data
+## Reproduce Final Experiment
 
-`data/` is excluded from git (530 MB course payload). Copy the files into `data/` and run `uv run sta4020-check-data`. See [data/README.md](data/README.md) for the schema. `price.h5` requires `h5py` (included in `--extra final`, or `uv add h5py`).
+Runs all 4 covariance estimators, return model selection, sensitivities, risk/style attribution, and contract audits into a fresh tag:
 
-## Directory Map
+```bash
+OPENBLAS_NUM_THREADS=1 uv run --locked --extra risk --extra final sta4020-run-final --tag final-recheck
+```
 
-| Path | Description | Owner |
-| --- | --- | --- |
-| `data/` | Raw vendor data (untracked). | shared |
-| `docs/` | Project guidelines, lecture slides, plan, report/slide sources. | shared |
-| `part1_return_model/` | FM and tree notebooks; see [Part 1 guide](part1_return_model/README.md). | Part 1 |
-| `part2_risk_model/` | Vendored risk model package (`risk_model`), tests, and spec; see [PROVENANCE.md](part2_risk_model/PROVENANCE.md). | Part 2 |
-| `part3_portfolio/` | Portfolio construction CLI (`Part3.py`); see [portfolio guide](part3_portfolio/README.md). | Part 3 |
-| `part4_evaluation/` | Evaluation outputs (`tables/`, `figures/`, `REPORT.md` per tag, untracked). | Part 4 |
-| `src/sta4020_project/` | Layered package: `shared/` (contracts, data, descriptors, tradability, config), `part1/`, `part2/`, `part4/`, and `pipeline/`. | shared |
-| `artifacts/part1/` | Part 1 outputs: expected returns, actual returns, candidate universe. | Part 1 |
-| `artifacts/part2/` | Part 2 output: `P2_Covariance.csv`. | Part 2 |
-| `artifacts/part3/` | Part 3 output: `Portfolio_Weights.csv`. | Part 3 |
-| `artifacts/sample/` | 20-asset, 24-month mock panel for smoke tests. | fixture |
-| `tests/` | Unit tests for shared code. | shared |
-| `_incoming/` | Original delivery archives (untracked). | shared |
+Compile PDFs and refresh README previews with [Typst](https://typst.app/):
 
-Tasks run via `[project.scripts]` in `pyproject.toml` or `uv run python <file>`.
+```bash
+# Compile report and slides (add `--input tag=final-recheck` for a custom tag)
+typst compile --root . docs/final_report.typ docs/deliverables/Final_Report.pdf
+typst compile --root . docs/final_slides.typ docs/deliverables/Final_Slides.pdf
 
-## Part Deliverables
+# Refresh PNG previews
+typst compile --root . --format png --ppi 120 --pages 1 docs/final_report.typ docs/previews/report_p1.png
+typst compile --root . --format png --ppi 120 docs/final_slides.typ 'docs/previews/slides_p{p}.png'
+```
 
-Parts communicate solely through four CSV contracts defined in [docs/PLAN.md](docs/PLAN.md):
+<details>
+<summary><strong>Step-by-step & custom CLI commands</strong> (click to expand)</summary>
 
-- **Part 1** -> `artifacts/part1/P1_Expected_Returns.csv` (FM forecast), `Actual_Returns.csv`, `P1_Candidate_Universe.csv`
-- **Part 2** -> `artifacts/part2/P2_Covariance.csv`
-- **Part 3** -> `artifacts/part3/Portfolio_Weights.csv`
-- **Part 4** -> `part4_evaluation/reports/TAG/REPORT.md` plus tables and figures
+```bash
+# Part 1: rebuild FM + lagged accounting forecasts
+uv run --locked --extra final sta4020-build-returns --output-dir artifacts/part1/run1
+
+# Part 2: build covariance (--method broad-factor | factor | sample | ledoit-wolf)
+uv run --locked --extra risk sta4020-build-risk --method broad-factor --output artifacts/part2/run1.csv
+
+# Part 3: optimize portfolios
+uv run python part3_portfolio/Part3.py \
+  --covariance artifacts/part2/run1.csv \
+  --max-weight 0.10 \
+  --output-dir artifacts/part3/run1
+
+# Part 4: validate and evaluate (--cost-sweep '' skips 0/10/30/50 bp table)
+uv run sta4020-check-artifacts --weights artifacts/part3/run1/Portfolio_Weights.csv
+uv run sta4020-evaluate --tag run1 --cost-bps 10 --freeze-suspensions \
+  --weights artifacts/part3/run1/Portfolio_Weights.csv
+```
+
+Pass `--descriptors /path/to/descriptors.pkl` to reuse an unpacked copy of `data/addition/descriptors.zip` (compact subset cache is enabled automatically). Pass `--tradability-data data` to both Part 3 and Part 4 for custom forecast files.
+
+</details>
 
 ## Working Agreement
 
-- Use one branch per part and merge via PR to `main`; check artifact contracts on boundary changes.
-- Keep `data/` and `_incoming/` out of git.
-- Run `uv run pytest`, `uv run sta4020-check-data`, and `uv run sta4020-check-artifacts` before requesting review.
-- Quote report numbers only from `part4_evaluation/reports/`.
-- Write each evaluation run to a distinct tag directory to keep reported numbers reproducible.
-- **Bilingual docs:** English is primary; Simplified Chinese counterparts use `.zh-CN.md`. Sync both when updating commands, paths, or interfaces. Leave upstream docs, course materials, and generated reports unchanged.
+- **Branches & PRs:** One branch per part (`part1/`–`part4/`) merging into `main`; run `pytest`, `sta4020-check-data`, and `sta4020-check-artifacts` before review.
+- **Reproducibility:** Keep `data/` and `_incoming/` untracked; write every evaluation run to a fresh tag; quote numbers solely from `part4_evaluation/reports/`.
+- **Bilingual Docs:** Keep `*.md` and `*.zh-CN.md` in sync when changing commands, paths, or contracts. Leave upstream `part2_risk_model/` docs untouched.
 
-## Clone & Initialize
+## TODO & Known Issues
 
-~~~bash
-git clone https://github.com/ShenYouSOTA/sta4020-group-project.git
-cd sta4020-group-project
-uv sync
-# copy raw data into data/, then:
-uv run sta4020-check-data && uv run pytest && uv run sta4020-sample
-~~~
+Tracked code and experimental-design issues from the latest audit, ordered by priority:
+
+- [ ] **P1 · Guard all report writers against overwriting finalized runs** ([sample.py](src/sta4020_project/pipeline/sample.py), [cli.py](src/sta4020_project/part4/cli.py)): `sta4020-sample --tag final` writes directly into `reports/final`, overwriting performance tables while leaving the original `manifest.json` intact. Enforce finalized-directory protection inside every report write path.
+- [ ] **P1 · Require valid execution-close quotes for eligibility** ([tradability.py](src/sta4020_project/shared/tradability.py), [backtest.py](src/sta4020_project/part4/backtest.py)): execution masks currently rely solely on vendor flags. In Oct 2021, `300354.SZ` lacked a close quote yet Black–Litterman opened a 4.17% position and GMV increased from ~1.07% to 6.93%, capturing a +34.49% next-month return. Require observed close prices for purchases, define missing-quote handling for existing holdings, and rerun affected outputs.
+- [ ] **P2 · Anchor max drawdown to initial wealth (`1.0`)** ([metrics.py](src/sta4020_project/part4/metrics.py), [Part3.py](part3_portfolio/Part3.py)): `[-20%, +10%]` currently reports `0%` instead of `-20%`. Full-sample net drawdown across all six paths is unchanged, while MVO's 2021 subperiod drawdown corrects from `-5.15%` to `-9.50%`.
+- [ ] **P2 · Enforce 1-to-1 next-month alignment in shared contracts** ([contracts.py](src/sta4020_project/shared/contracts.py), [Part3.py](part3_portfolio/Part3.py), [final.py](src/sta4020_project/pipeline/final.py)): `target_dates` currently maps both Jan and Feb origins to Mar if Feb returns are missing, passing `audit` until Part 4 fails late. Move the strict next-month check from `final.py` into `contracts.py`.
+- [ ] **P2 · Wire `FinalExperimentConfig` into execution and fix manifest reproduction command** ([config.py](src/sta4020_project/shared/config.py), [final.py](src/sta4020_project/pipeline/final.py)): `part1`, `part2`, `bl_tau`, and `cost_sweep` are logged in `manifest.json` without driving downstream runs (defaults match current constants). Also emit a fresh-tag reproduction command that preserves explicit `--descriptors`.
+- [ ] **Design · Separate model selection from post-selection evaluation** ([final.py](src/sta4020_project/pipeline/final.py), [final_report.typ](docs/final_report.typ)): the same 116-month window selects between FM and the accounting extension and reports the selected model's metrics. Frame current results as model-comparison evidence, or hold out a dedicated post-selection window.
