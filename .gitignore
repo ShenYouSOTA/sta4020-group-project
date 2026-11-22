@@ -1,5 +1,6 @@
 # Raw data: never commit, it is 600 MB and re-distributed separately.
 _incoming/
+part1_return_model/addition/
 # Ignore the payload but keep the layout documentation.
 data/*
 !data/README.md

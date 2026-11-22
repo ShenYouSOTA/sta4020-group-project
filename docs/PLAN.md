@@ -31,6 +31,7 @@ the same code path that will produce the final numbers.
 | data/FF5.csv | Fama-French five factors | 357 rows to 2024-09 |
 | data/risk_free.csv | Daily risk-free rate | 7223 rows |
 | data/zz500.pk | CSI 500 daily bars | 4346 x 7 |
+| data/addition/descriptors.zip | 213 monthly descriptors (value, quality, momentum, volatility, liquidity, leverage, analyst); see [the assessment](ADDITION_DATA_ASSESSMENT.md) | 6128 assets, 1999-12 .. 2026-08, 2.59 GiB unpacked |
 
 There is no industry classification anywhere in the data.  This matters for
 Part 2 (see risk R2).
@@ -160,11 +161,20 @@ Remaining work is explanation, not code:
 
 - Build the panel adapter: monthly excess returns from data/monthly_returns.pkl
   and data/risk_free.csv for the 50 assets in the candidate universe; market
-  caps from data/mcap.pkl; style exposures from price and turnover data.
-- Style descriptors available from the data: size (log market cap), momentum
-  (12-1 month return), short-term reversal (1 month), volatility and beta,
-  turnover and liquidity.  Value and quality are not available; either drop
-  them or proxy them and state the limitation.
+  caps from data/mcap.pkl; style exposures from data/addition/descriptors.zip.
+  The rules are in [the descriptor assessment](ADDITION_DATA_ASSESSMENT.md) §4.1.
+- Eight styles: size, value, momentum, short-term reversal, residual
+  volatility, liquidity, quality, leverage.  Value and quality now come from
+  the descriptors instead of being dropped.
+- Estimation window, implementation A (decided 2026-11-22): a balanced
+  50-asset panel from 2013-01 with an expanding window, because the youngest
+  assets list in 2012 and the first origin may only use data up to
+  2014-12-31.  The first origin therefore sees 24 months.  Implementation B
+  (factor returns estimated on a broad cross-section from 2005) is the
+  upgrade for the final report.
+- 300330.SZ delists in 2023: keep it in the covariance (N = 50), carry its
+  market cap and styles forward, and do not let its zero returns shrink its
+  own specific variance.
 - Industry: no classification exists in the data.  Either pass a single
   industry for all assets, which collapses the industry block into a market
   factor, or drop the industry block if the package allows it.  Decide once,
@@ -190,6 +200,7 @@ Remaining work is explanation, not code:
   1/N.
 - Apply the tradability masks in data/BLACKLIST.pkl and data/UNTRADABLE.pkl
   before optimising, and record how many names were dropped each month.
+  300330.SZ must have zero weight from 2023-05 (delisted; see R10).
 - Do not report the metrics computed inside Part3.py as final results.
 
 ### Part 4 - evaluation (this repository part)
@@ -242,6 +253,8 @@ because nothing downstream of it can be real until it exists.
 | R7 | Cost assumption is optimistic. | Overstated performance. | Report the 0-50 bp sensitivity and state the assumption in the slides. |
 | R8 | Interim discussion is in two days. | 20% of the grade. | Present the harness and the mock run as the integration proof, plus one real number per part where available; be explicit about what is real and what is a fixture. |
 | R9 | Reproducibility. | Code marks. | One interpreter, pinned requirements, tests, one command per part, no manual notebook steps in the deliverable path. |
+| R10 | 300330.SZ delists in 2023 but stays in the fixed universe with zero returns. | A zero-return asset looks riskless, so minimum-variance style optimisers pile into it. | Zero weight from 2023-05 in Part 3 and in the 1/N benchmark; Part 2 keeps its last pre-delisting specific variance. |
+| R11 | Short early history for Part 2 (implementation A) and undocumented vendor restatements in the descriptors. | Noisy early covariances; possible back-filled fundamentals. | State both as limitations; implementation B lengthens the factor-return history. |
 
 ## 6. Integration workflow
 
@@ -275,6 +288,8 @@ uv run sta4020-evaluate --tag final --cost-bps 10
 | 2026-11-21 | The legacy validated forecast was initially the default. | Superseded by the revised FM forecast and fixed universe; see the Part 1 section. |
 | 2026-11-21 | Transaction cost is a parameter, reported at 0, 10, 30 and 50 bp one-way. | 10 bp is a plausible base case for a liquid A-share book, but it is not defensible as the only number; the sensitivity table shows where the ranking flips. |
 | 2026-11-21 | Report numbers come from part4_evaluation/reports/ only. | Part3.py's own metrics ignore costs, the 1/N benchmark and any statistical test, so they cannot appear as results. |
+| 2026-11-22 | Part 2 styles come from data/addition/descriptors.zip; estimation uses implementation A (50 assets, from 2013-01, expanding window) for the interim, B for the final. | A needs no changes to the package and runs before the interim; B fixes the short early history. |
+| 2026-11-22 | Part 1 may only add descriptors lagged by one month, at most 15 pre-registered candidates. | The Part 1 signal is formed before the last trading day, when the month's descriptor is not yet known; screening all 213 fields would overfit. |
 
 ## 8. Definition of done
 
