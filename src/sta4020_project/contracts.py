@@ -11,13 +11,8 @@ artifacts/part1/P1_Expected_Returns.csv  (Part 1 -> Parts 3, 4)
     Wide. First column 'Date' = forecast origin (end of month t).
     One column per asset.  Value = expected SIMPLE return of month t+1.
 artifacts/part1/P1_Validated_Expected_Returns.csv
-    Same layout, produced after Part 1's model-validation step.  The group
-    decided (2026-11-21) to run the pipeline on this file.  OPEN TODO: confirm
-    with the Part 1 owner that the validation step only uses information
-    available before each origin, then re-check this choice.  The two files
-    are identical in shape and differ in every cell (mean absolute difference
-    about 29 bp per month), so the choice materially changes every downstream
-    number.  resolve_expected_returns() is the one place that decides.
+    Legacy forecast from the superseded comparison notebook. Use only with
+    the historical realised returns and covariance for its own fixed universe.
 artifacts/part1/Actual_Returns.csv       (Part 1 -> Parts 3, 4)
     Same layout.  'Date' = end of month t+1, value = realised simple return
     of that month.
@@ -60,7 +55,7 @@ def project_root(start: str | Path | None = None) -> Path:
     raise FileNotFoundError("cannot locate the group-project root (no artifacts/ + pyproject.toml)")
 
 
-DEFAULT_EXPECTED_VARIANT = "validated"
+DEFAULT_EXPECTED_VARIANT = "raw"
 
 
 def resolve_expected_returns(path: str | Path | None = None,
@@ -68,9 +63,8 @@ def resolve_expected_returns(path: str | Path | None = None,
                              root: str | Path | None = None) -> Path:
     """The single place that decides which Part 1 forecast file is used.
 
-    variant='validated' (default) uses the post-validation panel; 'raw' uses the
-    plain forecast file.  An explicit path always wins.  Falls back to raw when
-    the validated file does not exist, so a missing variant never crashes a run.
+    The default ('raw') is the current FM forecast. 'validated' explicitly
+    opts into the legacy panel if present. An explicit path always wins.
     """
     if path is not None:
         return Path(path)
@@ -96,7 +90,7 @@ class Paths:
 
     @property
     def validated_expected_returns(self) -> Path:
-        """Part 1's forecast after the validation step (the default input)."""
+        """Legacy forecast after the old comparison notebook's validation step."""
         return self.root / "artifacts" / "part1" / "P1_Validated_Expected_Returns.csv"
 
     @property

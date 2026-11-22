@@ -62,10 +62,8 @@ MODELS = (
 
 
 def default_expected_returns() -> Path:
-    """The forecast panel Part 4 also defaults to: validated, else raw."""
-    validated = PROJECT / "artifacts" / "part1" / "P1_Validated_Expected_Returns.csv"
-    raw = PROJECT / "artifacts" / "part1" / "P1_Expected_Returns.csv"
-    return validated if validated.exists() else raw
+    """Use the current Part 1 main forecast, as Part 4 does."""
+    return PROJECT / "artifacts" / "part1" / "P1_Expected_Returns.csv"
 
 
 def default_covariance() -> Path:
@@ -346,7 +344,7 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument("--expected", type=Path, default=default_expected_returns(),
-                        help="expected returns panel; the validated one is preferred by default")
+                        help="expected returns panel; defaults to the current Part 1 main forecast")
     parser.add_argument("--covariance", type=Path, default=default_covariance(),
                         help="long format covariance panel")
     parser.add_argument("--actual", type=Path, default=default_actual_returns(),

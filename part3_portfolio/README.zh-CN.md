@@ -24,7 +24,7 @@ python part3_portfolio/Part3.py \
     --output-dir /tmp/part3                          # mock artifacts
 ~~~
 
-默认设置：预期收益率取自 `artifacts/part1`（若已验证的面板存在，则使用该面板，与第 4 部分的默认设置一致）；协方差取自 `artifacts/part2/P2_Covariance.csv`；实际收益率取自 `artifacts/part1/Actual_Returns.csv`；输出写入 `artifacts/part3/`。
+默认设置：预期收益率取自 `artifacts/part1/P1_Expected_Returns.csv`（新版 FM 预测，与第 4 部分默认一致）；协方差取自 `artifacts/part2/P2_Covariance.csv`；实际收益率取自 `artifacts/part1/Actual_Returns.csv`；输出写入 `artifacts/part3/`。
 
 ## 输出
 

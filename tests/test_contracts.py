@@ -64,7 +64,7 @@ def test_audit_accepts_a_clean_panel():
     assert report.ok, report.issues
 
 
-def test_resolve_expected_returns_prefers_the_validated_panel(tmp_path):
+def test_resolve_expected_returns_prefers_the_current_panel(tmp_path):
     part1 = tmp_path / "artifacts" / "part1"
     part1.mkdir(parents=True)
     (tmp_path / "pyproject.toml").write_text("[project]\nname = 'x'\n", encoding="utf-8")
@@ -73,6 +73,9 @@ def test_resolve_expected_returns_prefers_the_validated_panel(tmp_path):
     (part1 / "P1_Validated_Expected_Returns.csv").write_text("Date,a\n2024-01-31,0.02\n",
                                                              encoding="utf-8")
     resolved = contracts.resolve_expected_returns(root=tmp_path)
-    assert resolved.name == "P1_Validated_Expected_Returns.csv"
+    assert resolved.name == "P1_Expected_Returns.csv"
+    legacy = contracts.resolve_expected_returns(variant="validated", root=tmp_path)
+    assert legacy.name == "P1_Validated_Expected_Returns.csv"
+    assert contracts.resolve_expected_returns(legacy, root=tmp_path) == legacy
     assert contracts.resolve_expected_returns(variant="raw", root=tmp_path).name == \
         "P1_Expected_Returns.csv"

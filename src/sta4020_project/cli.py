@@ -149,7 +149,7 @@ def build_parser() -> argparse.ArgumentParser:
     root = Paths().root
     parser.add_argument("--weights", type=Path, default=Paths().weights)
     parser.add_argument("--expected", type=Path, default=None,
-                        help="Part 1 forecast file; defaults to the validated panel")
+                        help="Part 1 forecast file; defaults to the current main forecast")
     parser.add_argument("--actual", type=Path, default=Paths().actual_returns)
     parser.add_argument("--risk-free", type=Path, default=root / "data" / "risk_free.csv")
     parser.add_argument("--out", type=Path, default=None)

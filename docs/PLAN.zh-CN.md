@@ -36,7 +36,7 @@
 - 资产池：50 只资产，在筛选日确定并固定，名单见 artifacts/part1/P1_Candidate_Universe.csv。样本外期始于 2014-12-31，首个预测目标月份为 2015-01-31。
 - artifacts/part1/P1_Expected_Returns.csv：116 个预测基准日 x 50 只资产；数值为下一自然月简单收益率的预测值。
 - artifacts/part1/Actual_Returns.csv：116 个月的实际收益率，覆盖 2015-01-31 .. 2024-08-31。
-- artifacts/part1/P1_Validated_Expected_Returns.csv：同一面板经验证步骤处理后的版本。**已决定（2026-11-21）**：流水线使用此文件，因为这是 Part 1 负责人认可的版本。两个面板的形状和列相同，但每个单元格都不同，月均相差 29 bp，因此这一选择会影响下游的所有数值。**待办（制作幻灯片前复核）**：与 Part 1 负责人确认验证步骤只使用各预测基准日当日或之前可获得的信息。否则，该差异源于前视偏差，必须改用原始面板。contracts.resolve_expected_returns() 是唯一的切换入口。
+- 默认使用新版 FM 预测 P1_Expected_Returns.csv。旧验证版预测仅供历史复现，不能与新版股票池混用。[Part 1 指南](../part1_return_model/README.md)说明如何运行主模型和树模型。Part 2 的协方差和 Part 3 的权重均需按新版股票池重新生成。
 - 今日用 `uv run sta4020-check-artifacts` 核验：0 项契约问题，116 个预测基准日与实际收益月份一一对应。
 
 ### Part 2 — 风险模型（软件包已交付，尚未接入真实数据）
@@ -47,7 +47,7 @@
 
 ### Part 3 — 投资组合构建（脚本已切换输入路径，已在模拟数据上运行）
 
-- part3_portfolio/Part3.py 通过命令行接收输入路径，默认从产物目录读取，因此不依赖当前工作目录：预期收益率来自 artifacts/part1（优先用验证后的面板，否则用原始面板）；协方差来自 artifacts/part2/P2_Covariance.csv；实际收益率来自 artifacts/part1/Actual_Returns.csv；输出写入 artifacts/part3。脚本生成 Portfolio_Weights.csv、OOS_Portfolio_Returns.csv 和 Forecast_Portfolio_Metrics.csv。用法详见 [Part 3 说明](../part3_portfolio/README.zh-CN.md)。
+- part3_portfolio/Part3.py 通过命令行接收输入路径，默认从产物目录读取，因此不依赖当前工作目录：预期收益率来自 artifacts/part1/P1_Expected_Returns.csv（新版 FM 预测）；协方差来自 artifacts/part2/P2_Covariance.csv；实际收益率来自 artifacts/part1/Actual_Returns.csv；输出写入 artifacts/part3。脚本生成 Portfolio_Weights.csv、OOS_Portfolio_Returns.csv 和 Forecast_Portfolio_Metrics.csv。用法详见 [Part 3 说明](../part3_portfolio/README.zh-CN.md)。
 - 五种方法：均值–方差优化、全局最小方差、最大分散化、风险平价、Black-Litterman。默认设置为 PERIODS_PER_YEAR = 12、RISK_AVERSION = 5.0、MAX_WEIGHT = None、RISK_FREE_RATE = 0.0；每项均可通过命令行选项设置。优化算法的计算逻辑沿用交付版本，未作改动。
 - 已交付的结果来自模拟数据：20 只占位资产（Stock_01 .. Stock_20），覆盖 2023-01 .. 2024-12 共 24 个月。作业指南要求至少 5 年（60 个月）的月度样本外数据，因此不能在报告中引用此次运行的数值。这是测试用例，不是实证结果。
 - Part3.py 在控制台打印自身计算的四项未计成本的指标，仅供核对，不再写出汇总表。报告中的数值必须来自 Part 4，因为后者纳入了成本、1/N 基准和统计检验。
@@ -97,7 +97,6 @@
 
 已交付：资产池筛选、116 期月度预测及实际收益率面板。剩余工作是完善说明，不是编写代码：
 
-- 确认 P1_Validated_Expected_Returns.csv 所用的验证窗口（见上文待办）；如果存在未来信息泄漏，改为交付原始面板并说明原因。
 - 记录各层次的模型（历史均值、基于信息系数 IC 筛选因子的因子模型、机器学习），并说明报告引用哪一种。
 - 核查筛选环节是否存在前视偏差：候选资产池于 2014-12-31 选定，只能使用该日期之前可获得的信息。
 
@@ -172,7 +171,7 @@ uv run sta4020-evaluate --tag final --cost-bps 10
 | --- | --- | --- |
 | 2026-11-21 | group-project 是独立的 git 仓库，不是 STA4020 课程仓库中的普通目录。 | 四个部分由四个人分别负责；共用一个课程仓库会暴露无关的课程作业，并混杂提交历史。 |
 | 2026-11-21 | 将 Part 2 仓库的内容直接纳入 part2_risk_model/（已移除内层 .git），不使用子模块。 | 子模块在提交评分的 ZIP 压缩包里只是空目录，嵌套仓库则会被外层仓库静默跳过。来源见 [PROVENANCE.md](../part2_risk_model/PROVENANCE.md)。 |
-| 2026-11-21 | Part 4 默认使用 P1_Validated_Expected_Returns.csv。 | Part 1 认可该面板；保留原始面板，可通过一个命令行选项切换回去。须复核验证窗口，见 Part 1 一节的待办。 |
+| 2026-11-21 | 旧验证版预测曾作为默认值。 | 现已改为新版 FM 预测及其固定股票池，见 Part 1 一节。 |
 | 2026-11-21 | 将交易成本设为参数，报告 0、10、30 和 50 bp 的单边成本情形。 | 对流动性较好的 A 股组合，10 bp 是合理的基准，但不足以作为唯一的假设；敏感性表展示排名在何处发生反转。 |
 | 2026-11-21 | 报告数值仅取自 part4_evaluation/reports/。 | Part3.py 自己计算的指标未考虑成本、1/N 基准和统计检验，因此不能作为报告结果。 |
 

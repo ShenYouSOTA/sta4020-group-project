@@ -44,15 +44,10 @@ Part 2 (see risk R2).
   the forecast of the next calendar month's simple return.
 - artifacts/part1/Actual_Returns.csv: 116 realised months, 2015-01-31 ..
   2024-08-31.
-- artifacts/part1/P1_Validated_Expected_Returns.csv: the same panel after the
-  validation step.  DECIDED 2026-11-21: the pipeline runs on this file, because
-  it is the version Part 1 actually stands behind.  The two panels share shape
-  and columns but differ in every cell, by 29 bp per month on average, so the
-  choice moves every downstream number.  OPEN TODO (recheck before the
-  slides): confirm with the Part 1 owner that the validation step only uses
-  information available at or before each origin.  If it does not, the
-  difference is look-ahead and the raw panel must be used instead.
-  contracts.resolve_expected_returns() is the single switch.
+- The current FM forecast (P1_Expected_Returns.csv) is the default. The legacy
+  validation panel is historical and must not be paired with the new universe.
+  The [Part 1 guide](../part1_return_model/README.md) describes the main and tree notebooks.
+  Rebuild Part 2 covariance and Part 3 weights against the updated fixed pool.
 - Verified today by `uv run sta4020-check-artifacts`: 0 contract issues, 116 origins
   map one-to-one onto realised months.
 
@@ -75,7 +70,7 @@ Part 2 (see risk R2).
 
 - part3_portfolio/Part3.py takes its inputs from the command line and defaults
   them to the artifact tree, so no working directory matters: expected returns
-  from artifacts/part1 (the validated panel first, plain panel otherwise),
+  from artifacts/part1/P1_Expected_Returns.csv (the current FM forecast),
   covariance from artifacts/part2/P2_Covariance.csv, realised returns from
   artifacts/part1/Actual_Returns.csv, outputs into artifacts/part3.  It writes
   Portfolio_Weights.csv, OOS_Portfolio_Returns.csv and
@@ -156,9 +151,6 @@ should be run before any integration commit.
 Already delivered: universe selection, 116 monthly forecasts, realised panel.
 Remaining work is explanation, not code:
 
-- Confirm the validation windows behind P1_Validated_Expected_Returns.csv
-  (see the open TODO above); if they leak future information, deliver the raw
-  panel instead and say so.
 - Document the model ladder (historical mean, factor model with IC-based factor
   selection, machine learning) and which one is cited in the report.
 - Check the selection step for look-ahead: the candidate universe is chosen at
@@ -280,7 +272,7 @@ uv run sta4020-evaluate --tag final --cost-bps 10
 | --- | --- | --- |
 | 2026-11-21 | group-project is its own git repository, not a folder in the STA4020 course repository. | The four parts belong to four people; sharing one course repository would expose unrelated coursework and mix commit history. |
 | 2026-11-21 | Part 2's repository is vendored into part2_risk_model/ (nested .git removed), not a submodule. | A submodule ships as an empty directory in the graded zip, and a nested repository is silently skipped by the outer one. Provenance is recorded in part2_risk_model/PROVENANCE.md. |
-| 2026-11-21 | Part 4 runs on P1_Validated_Expected_Returns.csv by default. | Part 1 stands behind that panel; the raw panel is kept as a one-flag fallback. Recheck the validation windows - see the TODO in the Part 1 section. |
+| 2026-11-21 | The legacy validated forecast was initially the default. | Superseded by the revised FM forecast and fixed universe; see the Part 1 section. |
 | 2026-11-21 | Transaction cost is a parameter, reported at 0, 10, 30 and 50 bp one-way. | 10 bp is a plausible base case for a liquid A-share book, but it is not defensible as the only number; the sensitivity table shows where the ranking flips. |
 | 2026-11-21 | Report numbers come from part4_evaluation/reports/ only. | Part3.py's own metrics ignore costs, the 1/N benchmark and any statistical test, so they cannot appear as results. |
 

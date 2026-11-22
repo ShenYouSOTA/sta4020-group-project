@@ -53,7 +53,7 @@ uv run sta4020-evaluate --tag run1 --cost-bps 10          # -> part4_evaluation/
 | `data/` | 原始数据：5,378 只股票的月收益率、日价格、市值、成交额、黑名单、FF5、无风险利率和中证 500 指数数据。原始文件不提交。 | 共享 |
 | `docs/` | 项目要求 PDF 和课程幻灯片。 | 共享 |
 | [工程计划](docs/PLAN.zh-CN.md) | 截止时间、接口、分工和风险。 | 共享 |
-| `part1_return_model/` | Part 1 的 notebook 和[原始中文说明](part1_return_model/README_PART1_ORIGINAL.md)，按收到的版本保留。 | Part 1 |
+| `part1_return_model/` | 新版 FM 和树模型 notebook，见 [Part 1 运行指南](part1_return_model/README.md)。 | Part 1 |
 | `part2_risk_model/` | 随仓库附带的 Part 2 软件包（`import risk_model`）、测试和规格说明。参见[上游 README（英文）](part2_risk_model/README.md)和[来源说明（英文）](part2_risk_model/PROVENANCE.md)。 | Part 2 |
 | `part3_portfolio/` | 投资组合构建脚本，默认在 `artifacts/` 下读写文件。参见[组合构建指南](part3_portfolio/README.zh-CN.md)。 | Part 3 |
 | `part4_evaluation/` | Part 4 评估输出；每个运行标签下有 `tables/`、`figures/` 和 `REPORT.md`，生成的文件不提交。 | Part 4 |
@@ -71,7 +71,7 @@ uv run sta4020-evaluate --tag run1 --cost-bps 10          # -> part4_evaluation/
 
 各部分只交换四个 CSV 文件，具体格式见工程计划中的[产物接口](docs/PLAN.zh-CN.md#3-产物接口)。除此之外，各部分互不依赖，因此可以单独重跑，也可以替换模型而不改动其他部分。
 
-- Part 1 → `artifacts/part1/P1_Validated_Expected_Returns.csv`（默认输入）和 `Actual_Returns.csv`；原始预测 `P1_Expected_Returns.csv` 保留作备用。
+- Part 1 → `artifacts/part1/P1_Expected_Returns.csv`（新版 FM 预测）、`Actual_Returns.csv` 和 `P1_Candidate_Universe.csv`。协方差与权重需按新版股票池重算；旧验证版预测不再是默认输入。
 - Part 2 → `artifacts/part2/P2_Covariance.csv`。
 - Part 3 → `artifacts/part3/Portfolio_Weights.csv`。
 - Part 4 → `part4_evaluation/reports/TAG/REPORT.md` 及相关表格和图表。

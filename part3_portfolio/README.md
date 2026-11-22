@@ -33,8 +33,8 @@ python part3_portfolio/Part3.py \
     --output-dir /tmp/part3                          # mock artifacts
 ~~~
 
-Defaults: expected returns from artifacts/part1 (the validated panel when it
-exists, matching the Part 4 default), covariance from
+Defaults: expected returns from artifacts/part1/P1_Expected_Returns.csv (the
+current FM forecast, also used by Part 4), covariance from
 artifacts/part2/P2_Covariance.csv, realised returns from
 artifacts/part1/Actual_Returns.csv, outputs to artifacts/part3/.
 

@@ -77,7 +77,7 @@ daily frequency route, so it is not in the default dependencies
 | data/ | Raw vendor data: 5378 monthly returns, daily prices, market caps, turnover, blacklists, FF5, risk-free, CSI 500. Not committed. | shared |
 | docs/ | Project guideline PDF and the lecture slides. | shared |
 | docs/PLAN.md | Engineering plan: deadlines, interfaces, work breakdown, risks. | shared |
-| part1_return_model/ | Part 1 notebooks and their original README, unchanged as delivered. | Part 1 |
+| part1_return_model/ | Current FM and tree notebooks; see the [Part 1 run guide](part1_return_model/README.md). | Part 1 |
 | part2_risk_model/ | Part 2 package (import risk_model), its tests and the spec; vendored, see PROVENANCE.md. | Part 2 |
 | part3_portfolio/ | Part 3 script Part3.py with a CLI; defaults to the artifacts tree. See the [portfolio guide](part3_portfolio/README.md). | Part 3 |
 | part4_evaluation/ | Part 4 report output: tables/, figures/, REPORT.md per run tag. Not committed. | Part 4 |
@@ -99,9 +99,9 @@ docs/PLAN.md under "Artifact contract".  Nothing else crosses a part boundary,
 so any part can be re-run - or replaced by a better model - without touching
 the others.
 
-- Part 1 -> artifacts/part1/P1_Validated_Expected_Returns.csv (the default input)
-  and Actual_Returns.csv; P1_Expected_Returns.csv is the raw forecast and stays
-  available as a fallback
+- Part 1 -> artifacts/part1/P1_Expected_Returns.csv (the current FM forecast),
+  Actual_Returns.csv, and P1_Candidate_Universe.csv. Rebuild covariance and
+  weights against the updated universe; the legacy validated forecast is not a default.
 - Part 2 -> artifacts/part2/P2_Covariance.csv
 - Part 3 -> artifacts/part3/Portfolio_Weights.csv
 - Part 4 -> part4_evaluation/reports/TAG/REPORT.md plus tables and figures

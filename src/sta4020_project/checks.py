@@ -107,14 +107,6 @@ def check_artifacts(argv: list[str] | None = None) -> int:
             print(f"covariance panel rejected: {error}")
             covariance = {}
 
-    raw_path = root / "artifacts" / "part1" / "P1_Expected_Returns.csv"
-    if Path(expected_path).name == "P1_Validated_Expected_Returns.csv" and raw_path.exists():
-        raw = contracts.read_wide(raw_path, label="raw forecast")
-        common = [column for column in expected.columns if column in raw.columns]
-        gap = (expected[common] - raw[common]).abs().to_numpy().mean()
-        print("using the validated forecast panel; mean absolute difference from the raw "
-              f"panel is {gap:.5f} per month (see the TODO in contracts.py)")
-
     report = contracts.audit(expected, actual, weights=weights, covariance=covariance or None)
     print(report.summary())
     print()
