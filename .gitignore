@@ -6,6 +6,7 @@ data/*
 !data/README.zh-CN.md
 
 # Generated artifacts and reports
+artifacts/part1/tree/
 artifacts/part2/*.csv
 artifacts/part3/*.csv
 part3_portfolio/Part3_Results/
