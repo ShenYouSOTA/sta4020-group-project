@@ -22,6 +22,7 @@ from . import contracts
 from . import report as report_module
 from .backtest import DEFAULT_WINDOWS, run_models, subperiod_performance
 from .contracts import Paths
+from .tradability import load_eligibility
 
 BENCHMARK = "1/N"
 
@@ -47,11 +48,13 @@ def monthly_risk_free(path: Path | None, dates: pd.Index) -> pd.Series | float:
 
 def cost_sensitivity(panels: dict[str, pd.DataFrame], realised: pd.DataFrame,
                      mapping: pd.Series, levels, *, risk_free=0.0,
-                     periods_per_year: int = 12, benchmark: str = BENCHMARK) -> pd.DataFrame:
+                     periods_per_year: int = 12, benchmark: str = BENCHMARK,
+                     eligibility: pd.DataFrame | None = None) -> pd.DataFrame:
     """Metrics for every model at every cost level, as a tidy long table."""
     rows = []
     for level in levels:
-        results = run_models(panels, realised, mapping, cost_bps=level, benchmark=benchmark)
+        results = run_models(panels, realised, mapping, cost_bps=level, benchmark=benchmark,
+                             eligibility=eligibility)
         for name, result in results.items():
             values = result.metrics(risk_free=risk_free, periods_per_year=periods_per_year)
             rows.append({
@@ -69,7 +72,8 @@ def cost_sensitivity(panels: dict[str, pd.DataFrame], realised: pd.DataFrame,
 def evaluate(weights_path: Path, expected_path: Path, actual_path: Path, out_dir: Path, *,
              risk_free_path: Path | None = None, cost_bps: float = 0.0,
              make_figures: bool = True, windows: dict | None = None,
-             cost_levels=None, weights_label: str | None = None) -> dict:
+             cost_levels=None, weights_label: str | None = None,
+             tradability_data: Path | None = None) -> dict:
     """Run the full Part 4 evaluation and return the written paths."""
     expected = contracts.read_wide(expected_path, label=Path(expected_path).name)
     actual = contracts.read_wide(actual_path, label="Actual_Returns")
@@ -83,17 +87,26 @@ def evaluate(weights_path: Path, expected_path: Path, actual_path: Path, out_dir
 
     mapping = contracts.target_dates(expected.index, actual.index)
     panels = contracts.weights_to_wide(weights)
+    eligibility = (load_eligibility(tradability_data, expected.index, assets)
+                   if tradability_data is not None else None)
     for name, panel in panels.items():
         panel.drop(columns=[column for column in panel.columns if column not in assets],
                    inplace=True, errors="ignore")
+        if not panel.index.equals(mapping.index):
+            raise ValueError(f"{name}: weights must cover every forecast origin")
+        if eligibility is not None and (panel.where(~eligibility).abs() > 1e-10).any().any():
+            raise ValueError(f"{name}: nonzero weights on ineligible assets")
 
     risk_free = monthly_risk_free(risk_free_path, mapping.values)
-    results = run_models(panels, actual, mapping, cost_bps=cost_bps, benchmark=BENCHMARK)
+    results = run_models(panels, actual, mapping, cost_bps=cost_bps, benchmark=BENCHMARK,
+                         eligibility=eligibility)
 
     attribution_tables = {}
     diagnostics = {}
     for name, panel in panels.items():
-        decomposition = attribution_module.decompose(panel, expected, actual, mapping)
+        decomposition = attribution_module.decompose(
+            panel, expected, actual, mapping, benchmark_weights=results[BENCHMARK].weights
+        )
         summary = attribution_module.summarise(decomposition)
         frame = pd.DataFrame([summary])
         frame.index = pd.Index([name], name="Model")
@@ -117,10 +130,12 @@ def evaluate(weights_path: Path, expected_path: Path, actual_path: Path, out_dir
         "first realised month": str(realised_dates.min().date()),
         "last realised month": str(realised_dates.max().date()),
     }
+    if tradability_data is not None:
+        config["tradability data"] = _display_path(tradability_data)
     sensitivity = None
     if cost_levels:
         sensitivity = cost_sensitivity(panels, actual, mapping, cost_levels,
-                                       risk_free=risk_free)
+                                       risk_free=risk_free, eligibility=eligibility)
     written = report_module.write_report(
         results, BENCHMARK, out_dir, risk_free=risk_free, attribution_tables=attribution_tables,
         diagnostics=diagnostics, config=config, make_figures=make_figures,
@@ -152,6 +167,8 @@ def build_parser() -> argparse.ArgumentParser:
                         help="Part 1 forecast file; defaults to the current main forecast")
     parser.add_argument("--actual", type=Path, default=Paths().actual_returns)
     parser.add_argument("--risk-free", type=Path, default=root / "data" / "risk_free.csv")
+    parser.add_argument("--tradability-data", type=Path,
+                        help="directory for vendor flags; defaults to data/ for the main forecast")
     parser.add_argument("--out", type=Path, default=None)
     parser.add_argument("--tag", type=str, default="latest")
     parser.add_argument("--cost-bps", type=float, default=0.0)
@@ -166,9 +183,13 @@ def main(argv: list[str] | None = None) -> int:
     out_dir = arguments.out or (Paths().root / "part4_evaluation" / "reports" / arguments.tag)
     levels = [float(item) for item in arguments.cost_sweep.split(",") if item.strip()]
     expected_path = contracts.resolve_expected_returns(arguments.expected)
+    tradability_data = arguments.tradability_data
+    if tradability_data is None and expected_path.resolve() == Paths().expected_returns:
+        tradability_data = Paths().root / "data"
     written = evaluate(arguments.weights, expected_path, arguments.actual, out_dir,
                        risk_free_path=arguments.risk_free, cost_bps=arguments.cost_bps,
-                       make_figures=not arguments.no_figures, cost_levels=levels or None)
+                       make_figures=not arguments.no_figures, cost_levels=levels or None,
+                       tradability_data=tradability_data)
     for label, path in written.items():
         print(f"{label}: {path}")
     return 0

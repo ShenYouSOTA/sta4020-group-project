@@ -105,7 +105,7 @@ def check_artifacts(argv: list[str] | None = None) -> int:
             covariance = contracts.read_covariance_panel(covariance_path, assets)
         except ValueError as error:
             print(f"covariance panel rejected: {error}")
-            covariance = {}
+            return 1
 
     report = contracts.audit(expected, actual, weights=weights, covariance=covariance or None)
     print(report.summary())

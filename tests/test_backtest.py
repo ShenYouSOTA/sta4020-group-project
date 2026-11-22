@@ -38,6 +38,16 @@ def test_equal_weight_benchmark_has_uniform_weights():
     assert np.allclose(frame.to_numpy(), 0.25)
 
 
+def test_turnover_uses_holdings_at_the_rebalance_close():
+    assets = ["a", "b"]
+    origins = pd.to_datetime(["2024-01-31", "2024-02-29"])
+    realised = panel([[0.20, 0.00], [0.00, 0.50]], ["2024-02-29", "2024-03-31"], assets)
+    weights = panel([[0.5, 0.5], [0.5, 0.5]], origins, assets)
+    mapping = contracts.target_dates(origins, realised.index)
+    result = backtest.run_backtest(weights, realised, mapping, cost_bps=10)
+    assert result.turnovers.iloc[1] == pytest.approx(0.60 / 1.10 - 0.50)
+
+
 def test_run_models_always_adds_the_benchmark():
     assets = [f"s{i}" for i in range(20)]
     origins = pd.to_datetime(["2024-01-31"])

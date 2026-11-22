@@ -50,12 +50,22 @@ came inside the Part 3 zip, passes the weights through the Part 4 evaluation,
 and writes part4_evaluation/reports/sample/REPORT.md.  It proves that the
 hand-off works before the real Part 2 and Part 3 outputs exist.
 
-Build the real portfolios and evaluate them once the artifacts exist:
+Reproduce the interim run from the delivered Part 1 forecasts and the local
+course data. The factor run requires `unzip` with Deflate64 support and
+temporary disk space for the 2.59 GiB extracted pickle.
 
 ~~~bash
-uv run python part3_portfolio/Part3.py                    # -> artifacts/part3
-uv run sta4020-evaluate --tag run1 --cost-bps 10          # -> part4_evaluation/reports/run1
+uv run --extra risk sta4020-build-risk --method factor
+uv run python part3_portfolio/Part3.py --max-weight 0.10 --output-dir artifacts/part3/run1
+uv run sta4020-check-artifacts --weights artifacts/part3/run1/Portfolio_Weights.csv
+uv run sta4020-evaluate --tag run1 --cost-bps 10 --weights artifacts/part3/run1/Portfolio_Weights.csv
 ~~~
+
+For covariance comparisons, rerun the builder with `--method sample` or
+`--method ledoit-wolf` and a distinct `--output`. Pass that file to Part 3
+with `--covariance` and use a separate output directory and report tag.
+The main forecast uses the local month-end vendor flags in both Part 3 and
+Part 4. Use `--tradability-data` on both commands for a custom forecast.
 
 `--cost-sweep 0,10,30,50` (the default) adds the cost-sensitivity table; pass
 `--cost-sweep ''` to skip it.

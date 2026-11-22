@@ -33,12 +33,16 @@ uv run sta4020-check-artifacts   # 检查 Part 1 和 Part 2 的 CSV 格式
 
 冒烟测试使用 Part 3 压缩包附带的 20 只股票、24 个月的模拟面板数据运行 Part 3，再将组合权重交给 Part 4 评估，生成 `part4_evaluation/reports/sample/REPORT.md`。这样在真正的 Part 2 和 Part 3 输出就绪之前，就能验证各环节能否衔接起来。
 
-实际输入就绪后，构建并评估真实投资组合：
+使用已交付的 Part 1 预测和本地课程数据复现中期回测。因子模型需要支持 Deflate64 的 `unzip`，以及可容纳 2.59 GiB 解压文件的临时磁盘空间。
 
 ~~~bash
-uv run python part3_portfolio/Part3.py                    # -> artifacts/part3
-uv run sta4020-evaluate --tag run1 --cost-bps 10          # -> part4_evaluation/reports/run1
+uv run --extra risk sta4020-build-risk --method factor
+uv run python part3_portfolio/Part3.py --max-weight 0.10 --output-dir artifacts/part3/run1
+uv run sta4020-check-artifacts --weights artifacts/part3/run1/Portfolio_Weights.csv
+uv run sta4020-evaluate --tag run1 --cost-bps 10 --weights artifacts/part3/run1/Portfolio_Weights.csv
 ~~~
+
+比较不同协方差估计时，可将构建命令的 `--method` 改为 `sample` 或 `ledoit-wolf`，通过 `--output` 指定独立的产物，再通过 `--covariance` 传给 Part 3。每种模型使用独立的权重目录和报告标签。主预测默认在 Part 3 和 Part 4 应用本地月末交易限制。自定义预测文件可在两个命令上指定同一个 `--tradability-data`。
 
 默认参数 `--cost-sweep 0,10,30,50` 会生成交易成本敏感性分析表；传入 `--cost-sweep ''` 可跳过此表。
 

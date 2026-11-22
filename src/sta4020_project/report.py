@@ -233,7 +233,7 @@ def write_report(results: dict[str, BacktestResult], benchmark: str, out_dir: Pa
         lines.append("")
 
     lines += ["## Required metrics", "",
-              "Every strategy is evaluated on the identical universe, calendar and cost model; "
+              "Every strategy uses the same eligible universe, calendar and cost model. "
               "the 1/N portfolio is the benchmark required by the brief.", "",
               _markdown_table(table), ""]
 
@@ -244,9 +244,8 @@ def write_report(results: dict[str, BacktestResult], benchmark: str, out_dir: Pa
 
     if attribution_tables:
         lines += ["## Where the gap comes from", "",
-                  "gap = signal + timing, per month, exactly. signal is the return paid for the tilts "
-                  "relative to the forecasts; timing is the part of the realised cross-section the "
-                  "forecasts did not anticipate.", ""]
+                  "The gross return gap against the same 1/N benchmark splits into the "
+                  "forecast return on active weights and the return from forecast errors.", ""]
         combined = pd.concat(list(attribution_tables.values()))
         lines += [_markdown_table(combined), ""]
 

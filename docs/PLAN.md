@@ -2,8 +2,7 @@
 
 English | [简体中文](PLAN.zh-CN.md)
 
-Status: first integration harness is running on mock data; the real Part 2 and
-Part 3 artifacts are still missing.  Owner of this document: Part 4.
+Status: the interim pipeline has run on the course data with 50 assets and 116 monthly out-of-sample returns.
 
 ## 1. Deadline map
 
@@ -52,64 +51,20 @@ Part 2 (see risk R2).
 - Verified today by `uv run sta4020-check-artifacts`: 0 contract issues, 116 origins
   map one-to-one onto realised months.
 
-### Part 2 - risk model (package delivered, real data not yet wired)
+### Part 2 - risk model
 
-- part2_risk_model/ is the delivered package (import risk_model). Entry point:
-  forecast_risk(panel, as_of, *, factor_covariance, covariance_shrinkage,
-  specific_shrinkage, dynamic_variance, integration_method, ...) returning an
-  N x N one-step-ahead stock covariance.
-- The panel contract is RiskPanel: dates (T,), asset_ids (N,), returns (T,N)
-  as excess returns, style_values (T,N,Q), style_ids (Q,),
-  industry_membership (T,N), industry_ids (P,), market_caps (T,N).  Balanced,
-  no NaN, T >= 2, because the model regresses exposures at t-1 on returns at t.
-- The upstream README states clearly that only synthetic data has been tested
-  and that data acquisition, cleaning, missing-value handling and the
-  construction of economic style descriptors are out of scope.  That work is
-  therefore the Part 2 owner's remaining task, and it is the critical path.
+- Sample, Ledoit–Wolf and eight-style factor models each produce 116 covariance blocks of 50 × 50. All factor blocks are positive definite and reproducible from the source archive.
+- The factor model uses an expanding history from 2013-01. It regresses monthly excess returns on the preceding month's exposures and uses sample factor covariance and specific variance estimates. A single industry group is used because the data lack labels. Starting at the May 2023 close, the active cross-section omits the delisted asset. Its last pre-delisting specific variance is retained in the artifact.
 
-### Part 3 - portfolio construction (script repointed, run on mock data)
+### Part 3 - portfolio construction
 
-- part3_portfolio/Part3.py takes its inputs from the command line and defaults
-  them to the artifact tree, so no working directory matters: expected returns
-  from artifacts/part1/P1_Expected_Returns.csv (the current FM forecast),
-  covariance from artifacts/part2/P2_Covariance.csv, realised returns from
-  artifacts/part1/Actual_Returns.csv, outputs into artifacts/part3.  It writes
-  Portfolio_Weights.csv, OOS_Portfolio_Returns.csv and
-  Forecast_Portfolio_Metrics.csv.
-- Five methods: Mean-Variance Optimization, Global Minimum Variance, Maximum
-  Diversification, Risk Parity, Black-Litterman.  Settings default to
-  PERIODS_PER_YEAR = 12, RISK_AVERSION = 5.0, MAX_WEIGHT = None,
-  RISK_FREE_RATE = 0.0 and each is a flag.  The optimiser arithmetic is the
-  delivered version unchanged.
-- The delivered results come from mock data: 20 placeholder assets
-  (Stock_01 .. Stock_20) over 24 months, 2023-01 .. 2024-12.  The guideline
-  requires at least 5 years (60 months) of monthly OOS data, so this run cannot
-  be quoted in the report.  It is a fixture, not a result.
-- Part3.py prints its own four uncosted metrics to the console as a
-  reconciliation check and no longer writes a summary table, because the
-  reported numbers must come from Part 4, which adds costs, the 1/N benchmark
-  and statistical tests.
+- All five methods have run on the course data. Month-end vendor flags exclude 0 to 9 assets per origin. The delisted asset has zero weight from the May 2023 close. The 10% weight cap run is in `artifacts/part3/interim-10pct/`.
+- The simulation treats target weights as executable at the close, including immediate removal of previously held names that become ineligible. Execution during suspensions remains to be modelled.
 
-### Part 4 - evaluation (harness implemented, tested)
+### Part 4 - evaluation
 
-- src/sta4020_project/ implements the contract layer, metrics, inference,
-  backtest engine with transaction costs, return attribution, reporting and a
-  CLI.  tests/ covers 21 behaviours.  `uv run sta4020-sample` runs Part3.py on
-  the mock panel and then Part 4 on its output, which
-  proves the hand-off end to end.
-- Sample run (20 assets, 24 months, 10 bp one-way):
-
-| Model | Annualized return | Annualized volatility | Sharpe | Maximum drawdown |
-| --- | --- | --- | --- | --- |
-| Risk Parity | 0.1022 | 0.0952 | 0.9421 | -0.0851 |
-| Maximum Diversification | 0.0929 | 0.0967 | 0.8413 | -0.0867 |
-| Global Minimum Variance | 0.0920 | 0.0988 | 0.8168 | -0.0866 |
-| 1/N | 0.0915 | 0.0933 | 0.8543 | -0.0830 |
-| Mean-Variance Optimization | 0.0446 | 0.1560 | 0.2734 | -0.0847 |
-| Black-Litterman | -0.0463 | 0.1306 | -0.3945 | -0.1654 |
-
-These numbers describe the mock panel and are only quoted to show that the code
-runs.  They are not evidence about any model.
+- The main interim evaluation is in `part4_evaluation/reports/interim-10pct/REPORT.md`, with a 10% single-asset weight cap and 10 bp one-way cost. Uncapped factor, sample and Ledoit–Wolf runs use `interim`, `sample-risk` and `ledoit-wolf` respectively.
+- Strategies, 1/N and attribution use the same eligible assets. Trading costs use drifted holdings available at the rebalance close.
 
 ## 3. Artifact contract
 
@@ -157,9 +112,9 @@ Remaining work is explanation, not code:
 - Check the selection step for look-ahead: the candidate universe is chosen at
   2014-12-31 and must use information available before that date only.
 
-### Part 2 - risk model (critical path)
+### Part 2 - risk model
 
-- Build the panel adapter: monthly excess returns from data/monthly_returns.pkl
+- The panel adapter is running with monthly excess returns from data/monthly_returns.pkl
   and data/risk_free.csv for the 50 assets in the candidate universe; market
   caps from data/mcap.pkl; style exposures from data/addition/descriptors.zip.
   The rules are in [the descriptor assessment](ADDITION_DATA_ASSESSMENT.md) §4.1.
@@ -175,13 +130,10 @@ Remaining work is explanation, not code:
 - 300330.SZ delists in 2023: keep it in the covariance (N = 50), carry its
   market cap and styles forward, and do not let its zero returns shrink its
   own specific variance.
-- Industry: no classification exists in the data.  Either pass a single
-  industry for all assets, which collapses the industry block into a market
-  factor, or drop the industry block if the package allows it.  Decide once,
-  document it in the Part 2 chapter, and state it as a limitation.
-- Run forecast_risk for every origin in the Part 1 calendar and write
-  artifacts/part2/P2_Covariance.csv.  Verify that every block is symmetric,
-  positive definite and identical for the specific-risk diagonal.
+- Industry: no classification exists in the data.  Implementation A uses a
+  single industry group, leaving the market intercept.
+- Implementation A uses the package factor fit and covariance assembly.
+  All 116 blocks in artifacts/part2/P2_Covariance.csv are positive definite.
 - Calibration and comparison: sample covariance, Ledoit-Wolf shrinkage and the
   Barra-style factor model on the same window; report realised out-of-sample
   volatility of the covariance estimates as the objective criterion.
@@ -190,15 +142,14 @@ Remaining work is explanation, not code:
 
 - Inputs are wired (done): artifacts/part1 and artifacts/part2 by default,
   overridable per flag, so `uv run python part3_portfolio/Part3.py` is the one
-  command.  What remains is
-  the real P2_Covariance.csv, which does not exist yet.
+  command.  The real covariance hand-off has been verified.
 - Add the constraints the report will claim: MAX_WEIGHT cap (for example 5% or
   10%), optional turnover penalty, and a documented choice of RISK_AVERSION.
   The flags exist; the values still have to be chosen and justified.
 - Produce at least one sensitivity run: risk aversion 2, 5, 10 and a
   Black-Litterman variant with a different tau or a market-cap prior instead of
   1/N.
-- Apply the tradability masks in data/BLACKLIST.pkl and data/UNTRADABLE.pkl
+- Applied the tradability masks in data/BLACKLIST.pkl and data/UNTRADABLE.pkl
   before optimising, and record how many names were dropped each month.
   300330.SZ must have zero weight from 2023-05 (delisted; see R10).
 - Do not report the metrics computed inside Part3.py as final results.
@@ -213,12 +164,11 @@ weight diagnostics, three figures and a markdown report.
 
 Remaining work, in order:
 
-1. Run the real artifacts the day Part 3 delivers and freeze the first result
-   set under a tag (for example reports/interim/).
+1. The first real runs are complete. The main interim evaluation is in reports/interim-10pct/.
 2. Cost sensitivity: the machinery is already wired (--cost-sweep writes
    tables/cost_sensitivity.csv and two pivot tables into REPORT.md at 0, 10, 30
-   and 50 bp one-way).  What remains is running it on the real artifacts and
-   writing the paragraph that says at which cost level the ranking flips.  This
+   and 50 bp one-way).  The real tables are available. The write-up still needs to address
+   whether the ranking changes across cost levels.  This
    is the strongest single piece of practical critique available.
 3. Subperiod narrative: 2015 crash, 2018 de-risking, 2021-2022 drawdown,
    2023-2024.  For each, name the Part 1-3 modelling choice that explains the
@@ -235,18 +185,13 @@ Remaining work, in order:
 
 data -> Part 1 artifacts -> Part 2 covariance -> Part 3 weights -> Part 4 report
 
-Part 4 can already produce every table and figure from the mock panel, so any
-delay in Part 2 or Part 3 costs nothing in Part 4 code work; it only delays the
-real numbers.  The one thing that cannot be compressed is the Part 2 adapter,
-because nothing downstream of it can be real until it exists.
-
 ## 5. Risks
 
 | # | Risk | Impact | Mitigation |
 | --- | --- | --- | --- |
-| R1 | Part 2 has never run on real data; the panel adapter and the style construction are unbuilt. | Blocks Part 3 and the real Part 4 numbers. | Highest priority. Target: a plain sample-covariance path first, which needs no style factors at all, so Part 3 can run end to end while the factor model matures. |
+| R1 | The broad cross-sectional risk model is pending. | Early history is short. | Run implementation A and report covariance comparisons on the same calendar. |
 | R2 | No industry classification in the data. | The Barra-style model loses its industry block; the comparison to the literature weakens. | Decide the proxy explicitly, report it as a limitation, and lean on the style-factor-only specification. |
-| R3 | Part 3 currently consumes mock data with 24 months. | Any quoted number would be wrong and below the 60-month requirement. | Treated as a fixture. The report only quotes reports/ generated from artifacts/part1 and artifacts/part2. |
+| R3 | The smoke-test fixture has 24 months. | Any quoted number would be wrong and below the 60-month requirement. | Treated as a fixture. The report only quotes reports/ generated from artifacts/part1 and artifacts/part2. |
 | R4 | Universe drift between parts (50 in Part 1, 20 in the mock, N in Part 2). | Silent mismatched assets, wrong weights. | P1_Candidate_Universe.csv is the master list; check_artifacts.py enforces the intersection rule. |
 | R5 | Look-ahead in the Part 1 selection or in the covariance window. | Invalidates the whole OOS claim. | Review the notebooks' window boundaries; the covariance at origin t may only use data up to t. |
 | R6 | Untradable names entering the weights. | Unrealistic performance. | Apply BLACKLIST/UNTRADABLE masks in Part 3; Part 4 reports turnover and the cost drag so the effect is visible. |
@@ -274,6 +219,7 @@ because nothing downstream of it can be real until it exists.
 ~~~
 uv sync
 uv run sta4020-check-data
+uv run --extra risk sta4020-build-risk --method factor
 uv run sta4020-check-artifacts
 uv run python part3_portfolio/Part3.py    # artifacts/part1 + artifacts/part2
 uv run sta4020-evaluate --tag final --cost-bps 10

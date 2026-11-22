@@ -2,7 +2,7 @@
 
 [English](PLAN.md) | 简体中文
 
-当前状态：首版集成流程已能在模拟数据上运行，但 Part 2 和 Part 3 的真实产物仍未交付。本文档由 Part 4 负责。
+当前状态：中期真实数据回测已接通。50 只股票、116 期月度样本外收益已完成评估。
 
 ## 1. 截止时间与考核要求
 
@@ -40,34 +40,20 @@
 - 默认使用新版 FM 预测 P1_Expected_Returns.csv。旧验证版预测仅供历史复现，不能与新版股票池混用。[Part 1 指南](../part1_return_model/README.md)说明如何运行主模型和树模型。Part 2 的协方差和 Part 3 的权重均需按新版股票池重新生成。
 - 今日用 `uv run sta4020-check-artifacts` 核验：0 项契约问题，116 个预测基准日与实际收益月份一一对应。
 
-### Part 2 — 风险模型（软件包已交付，尚未接入真实数据）
+### Part 2 — 风险模型
 
-- part2_risk_model/ 是已交付的软件包（import risk_model）。入口：forecast_risk(panel, as_of, *, factor_covariance, covariance_shrinkage, specific_shrinkage, dynamic_variance, integration_method, ...)，返回 N x N 的下一期股票收益率协方差矩阵。
-- 输入面板契约为 RiskPanel：dates (T,)、asset_ids (N,)、returns (T,N)（超额收益率）、style_values (T,N,Q)、style_ids (Q,)、industry_membership (T,N)、industry_ids (P,)、market_caps (T,N)。面板须平衡、无 NaN，且 T >= 2，因为模型用 t-1 期的暴露作为解释变量来回归 t 期收益率。
-- [上游 README](../part2_risk_model/README.md) 明确指出，仅在合成数据上做过测试，数据获取、清洗、缺失值处理及经济风格描述指标的构建均不在软件包的范围内。这些工作仍由 Part 2 负责人完成，且是项目的关键路径。
+- 样本协方差、Ledoit–Wolf 和八风格因子模型均已生成 116 个 50 × 50 协方差块。因子矩阵逐月正定，源文件压缩包可以复现。
+- 因子模型使用 2013-01 起的扩展历史。用上月暴露回归当月超额收益，估计因子样本协方差和特异方差。无行业标签，使用单一行业组。自 2023-05 月末起由仍在投资池的资产估计当前截面，退市股保留最后一个退市前特异方差。
 
-### Part 3 — 投资组合构建（脚本已切换输入路径，已在模拟数据上运行）
+### Part 3 — 投资组合构建
 
-- part3_portfolio/Part3.py 通过命令行接收输入路径，默认从产物目录读取，因此不依赖当前工作目录：预期收益率来自 artifacts/part1/P1_Expected_Returns.csv（新版 FM 预测）；协方差来自 artifacts/part2/P2_Covariance.csv；实际收益率来自 artifacts/part1/Actual_Returns.csv；输出写入 artifacts/part3。脚本生成 Portfolio_Weights.csv、OOS_Portfolio_Returns.csv 和 Forecast_Portfolio_Metrics.csv。用法详见 [Part 3 说明](../part3_portfolio/README.zh-CN.md)。
-- 五种方法：均值–方差优化、全局最小方差、最大分散化、风险平价、Black-Litterman。默认设置为 PERIODS_PER_YEAR = 12、RISK_AVERSION = 5.0、MAX_WEIGHT = None、RISK_FREE_RATE = 0.0；每项均可通过命令行选项设置。优化算法的计算逻辑沿用交付版本，未作改动。
-- 已交付的结果来自模拟数据：20 只占位资产（Stock_01 .. Stock_20），覆盖 2023-01 .. 2024-12 共 24 个月。作业指南要求至少 5 年（60 个月）的月度样本外数据，因此不能在报告中引用此次运行的数值。这是测试用例，不是实证结果。
-- Part3.py 在控制台打印自身计算的四项未计成本的指标，仅供核对，不再写出汇总表。报告中的数值必须来自 Part 4，因为后者纳入了成本、1/N 基准和统计检验。
+- 五种组合均已在真实数据上运行。月末根据供应商标记排除 0 至 9 个资产，退市股自 2023-05 月末起权重为零。10% 单股权重上限实验保存在 `artifacts/part3/interim-10pct/`。
+- 回测按月末目标权重计价，列为不可交易的已有持仓视为能即时移出，停牌期间的实际成交仍需建模。
 
-### Part 4 — 评估（集成流程已实现并测试）
+### Part 4 — 评估
 
-- src/sta4020_project/ 实现了数据契约层、指标、统计推断、含交易成本的回测引擎、收益归因、报告和命令行界面。tests/ 覆盖 21 项行为。`uv run sta4020-sample` 先用模拟面板运行 Part3.py，再用其输出运行 Part 4，验证了端到端的交接。
-- 示例运行（20 只资产、24 个月、单边成本 10 bp）：
-
-| 模型 | 年化收益率 | 年化波动率 | 夏普比率 | 最大回撤 |
-| --- | --- | --- | --- | --- |
-| 风险平价 | 0.1022 | 0.0952 | 0.9421 | -0.0851 |
-| 最大分散化 | 0.0929 | 0.0967 | 0.8413 | -0.0867 |
-| 全局最小方差 | 0.0920 | 0.0988 | 0.8168 | -0.0866 |
-| 1/N | 0.0915 | 0.0933 | 0.8543 | -0.0830 |
-| 均值–方差优化 | 0.0446 | 0.1560 | 0.2734 | -0.0847 |
-| Black-Litterman | -0.0463 | 0.1306 | -0.3945 | -0.1654 |
-
-以上数值仅描述模拟面板，只用于说明代码能够运行，不能作为任何模型的实证依据。
+- 主中期评估位于 `part4_evaluation/reports/interim-10pct/REPORT.md`，使用 10% 权重上限和 10 bp 单边成本。无持仓上限的因子、样本和 Ledoit–Wolf 对照报告标签分别为 `interim`、`sample-risk` 和 `ledoit-wolf`。
+- 策略、1/N 基准和归因使用同一份可交易股票池，交易成本按调仓时已实现的持仓漂移计算。
 
 ## 3. 产物接口
 
@@ -101,22 +87,22 @@
 - 记录各层次的模型（历史均值、基于信息系数 IC 筛选因子的因子模型、机器学习），并说明报告引用哪一种。
 - 核查筛选环节是否存在前视偏差：候选资产池于 2014-12-31 选定，只能使用该日期之前可获得的信息。
 
-### Part 2 — 风险模型（关键路径）
+### Part 2 — 风险模型
 
-- 构建面板适配器：针对候选池中的 50 只资产，从 data/monthly_returns.pkl 和 data/risk_free.csv 构建月度超额收益率，从 data/mcap.pkl 取得市值，从 data/addition/descriptors.zip 构建风格暴露。规则见[描述变量评估](ADDITION_DATA_ASSESSMENT.zh-CN.md) §4.1。
+- 面板适配器已接通：针对候选池中的 50 只资产，从 data/monthly_returns.pkl 和 data/risk_free.csv 构建月度超额收益率，从 data/mcap.pkl 取得市值，从 data/addition/descriptors.zip 构建风格暴露。规则见[描述变量评估](ADDITION_DATA_ASSESSMENT.zh-CN.md) §4.1。
 - 8 个风格：规模、价值、动量、短期反转、残差波动、流动性、质量、杠杆。价值和质量现在由描述变量提供，不再剔除。
 - 估计窗口采用方案 A（2026-11-22 决定）：50 只股票的平衡面板从 2013-01 开始、扩展窗口估计。原因是最年轻的股票 2012 年才上市，而首个预测日只能用截至 2014-12-31 的数据，所以首个预测日只有 24 个月历史。方案 B（在宽截面上估计 2005 年起的因子收益）是期末报告的升级。
 - 300330.SZ 于 2023 年退市：协方差中保留（N = 50），市值和风格沿用最后观测值，不让它的零收益压低它自己的特异方差。
-- 行业：数据不含行业分类。可以把所有资产划入同一行业，使行业块退化为市场因子；如果软件包允许，也可以移除行业块。确定一种做法后，在 Part 2 章节记录并将其列为局限。
-- 对 Part 1 日历中每个预测基准日运行 forecast_risk，写入 artifacts/part2/P2_Covariance.csv。验证各矩阵块均对称、正定，并核对特质风险对角线是否一致。
+- 行业：数据不含行业分类。方案 A 将资产划入同一行业，使行业组只保留市场截距。
+- 方案 A 使用现有软件包的因子回归和协方差组装函数，已生成并验证 116 个正定协方差块。
 - 校准与比较：用相同窗口比较样本协方差、Ledoit-Wolf 收缩估计与 Barra 风格因子模型；以各协方差估计对应的样本外实现波动率作为客观评价标准并报告。
 
 ### Part 3 — 投资组合构建
 
-- 输入已接通：默认使用 artifacts/part1 和 artifacts/part2，可用各自的命令行选项覆盖。因此，只需运行 `uv run python part3_portfolio/Part3.py`。尚缺真实的 P2_Covariance.csv，目前该文件还不存在。
+- 输入已接通：默认使用 artifacts/part1 和 artifacts/part2，可用各自的命令行选项覆盖。因此，只需运行 `uv run python part3_portfolio/Part3.py`。真实数据路径已验证。
 - 加入报告将声明的约束和参数设定：MAX_WEIGHT 权重上限（例如 5% 或 10%）、可选的换手率惩罚项，以及有说明依据的 RISK_AVERSION 取值。命令行选项已存在，但仍须选定数值并说明理由。
 - 至少完成一轮敏感性分析：比较风险厌恶系数 2、5、10，并测试一个 Black-Litterman 变体，即使用不同的 tau，或用市值加权先验替代 1/N。
-- 优化前应用 data/BLACKLIST.pkl 和 data/UNTRADABLE.pkl 中的可交易性掩码，记录每月剔除的股票数量。300330.SZ 自 2023-05 起权重必须为 0（已退市，见 R10）。
+- 已在优化和 1/N 基准中应用 data/BLACKLIST.pkl 和 data/UNTRADABLE.pkl 中的可交易性掩码，记录每月剔除的股票数量。300330.SZ 自 2023-05 起权重必须为 0（已退市，见 R10）。
 - 不要把 Part3.py 内部计算的指标列为最终结果。
 
 ### Part 4 — 评估（本仓库负责的部分）
@@ -125,8 +111,8 @@
 
 剩余工作，按顺序如下：
 
-1. Part 3 交付当天即使用真实产物运行评估，以标签冻结首批结果（例如 reports/interim/）。
-2. 成本敏感性：功能已接通（--cost-sweep 针对 0、10、30 和 50 bp 的单边成本生成 tables/cost_sensitivity.csv，并在 REPORT.md 中写入两张透视表）。仍须在真实产物上运行，并撰文说明策略排名在哪个成本水平发生反转。这是最有力的一项实践层面批判性分析。
+1. 首批结果已生成，以 reports/interim-10pct/ 为中期主评估。
+2. 成本敏感性：功能已接通（--cost-sweep 针对 0、10、30 和 50 bp 的单边成本生成 tables/cost_sensitivity.csv，并在 REPORT.md 中写入两张透视表）。真实数据分析表已生成，仍须解释策略排名对成本的敏感性。这是最有力的一项实践层面批判性分析。
 3. 分阶段解读：2015 年股灾、2018 年风险收缩、2021-2022 年回撤、2023-2024 年。各阶段都要指出 Part 1–3 中哪项建模选择能够解释该结果。
 4. 撰写归因分析：说明差距中有多少来自信号，有多少来自择时。一个只靠择时「获胜」的策略只算一个发现，不能算成功。
 5. 权重诊断：有效持仓数、最大权重、换手率。权重集中是协方差矩阵病态时的典型表现，这正是报告需要通过 Part 2 对比来检验的现象。
@@ -136,15 +122,13 @@
 
 data -> Part 1 产物 -> Part 2 协方差 -> Part 3 权重 -> Part 4 报告
 
-目前 Part 4 已能用模拟面板生成所有表格和图形。因此，Part 2 或 Part 3 延迟并不会增加 Part 4 的代码工作量，只会推迟真实结果。唯独 Part 2 适配器的工作无法压缩：在它完成之前，下游都无法产出真实结果。
-
 ## 5. 风险
 
 | 编号 | 风险 | 影响 | 缓解措施 |
 | --- | --- | --- | --- |
-| R1 | Part 2 从未在真实数据上运行；面板适配器和风格指标构建尚未实现。 | 阻塞 Part 3 以及 Part 4 的真实结果。 | 最高优先级。先实现不依赖任何风格因子的普通样本协方差方案，使 Part 3 能在因子模型完善期间先跑通端到端流程。 |
+| R1 | 期末宽截面风险模型仍待实现。 | 早期样本偏短。 | 中期使用方案 A，按相同日历报告风险估计对照。 |
 | R2 | 数据中没有行业分类。 | Barra 风格模型缺少行业块，与文献中的模型对比说服力减弱。 | 明确选定代理方案，在报告中列为局限，主要依靠仅含风格因子的模型设定。 |
-| R3 | Part 3 当前用的是仅覆盖 24 个月的模拟数据。 | 任何引用都不能代表真实表现，且不满足 60 个月的要求。 | 仅作为测试用例。报告只引用由 artifacts/part1 和 artifacts/part2 生成并存放于 reports/ 的结果。 |
+| R3 | 模拟测试仅覆盖 24 个月。 | 任何引用都不能代表真实表现，且不满足 60 个月的要求。 | 仅作为测试用例。报告只引用由 artifacts/part1 和 artifacts/part2 生成并存放于 reports/ 的结果。 |
 | R4 | 各部分的资产池不一致（Part 1 为 50 只，模拟数据为 20 只，Part 2 为 N 只）。 | 资产可能在未报错的情况下错配，导致权重错误。 | 以 P1_Candidate_Universe.csv 为资产总名单；check_artifacts.py 强制执行交集规则。 |
 | R5 | Part 1 的资产筛选或协方差估计窗口存在前视偏差。 | 整个样本外结论失效。 | 复查笔记本中的窗口边界；预测基准日 t 的协方差只能使用截至 t 的数据。 |
 | R6 | 不可交易的股票进入组合。 | 业绩不切实际。 | Part 3 应用 BLACKLIST/UNTRADABLE 掩码；Part 4 报告换手率和交易成本对表现的拖累，使其影响可见。 |
@@ -165,6 +149,7 @@ data -> Part 1 产物 -> Part 2 协方差 -> Part 3 权重 -> Part 4 报告
 ~~~
 uv sync
 uv run sta4020-check-data
+uv run --extra risk sta4020-build-risk --method factor
 uv run sta4020-check-artifacts
 uv run python part3_portfolio/Part3.py    # artifacts/part1 + artifacts/part2
 uv run sta4020-evaluate --tag final --cost-bps 10

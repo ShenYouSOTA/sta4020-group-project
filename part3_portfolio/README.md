@@ -26,7 +26,7 @@ The five methods and their objectives are unchanged.
 
 ~~~bash
 uv run python part3_portfolio/Part3.py               # real artifacts
-python part3_portfolio/Part3.py \
+uv run python part3_portfolio/Part3.py \
     --expected artifacts/sample/P1_Expected_Returns.csv \
     --covariance artifacts/sample/P2_Covariance.csv \
     --actual artifacts/sample/Actual_Returns.csv \
@@ -38,6 +38,11 @@ current FM forecast, also used by Part 4), covariance from
 artifacts/part2/P2_Covariance.csv, realised returns from
 artifacts/part1/Actual_Returns.csv, outputs to artifacts/part3/.
 
+The main forecast applies the vendor blacklist and untradable flags at each
+month's last trading close. For a custom forecast, pass `--tradability-data`
+to both Part 3 and Part 4. Use `--max-weight 0.10` to reproduce the interim
+single-asset weight cap.
+
 ## Outputs
 
 | File | Columns | Consumer |
@@ -45,6 +50,7 @@ artifacts/part1/Actual_Returns.csv, outputs to artifacts/part3/.
 | Portfolio_Weights.csv | Date, Model, Asset, Weight | Part 4 |
 | OOS_Portfolio_Returns.csv | Date, Model, Portfolio_Return | reconciliation only |
 | Forecast_Portfolio_Metrics.csv | Date, Model, Expected_Return, Expected_Volatility | forecast diagnostics |
+| Tradability_Diagnostics.csv | Date, Excluded_Assets | produced when vendor flags are applied |
 
 Weights are long only and sum to one per model per date. Costs, the 1/N
 benchmark and all statistical tests belong to Part 4.

@@ -55,7 +55,7 @@ def run_backtest(weights: pd.DataFrame, realised: pd.DataFrame, mapping: pd.Seri
     weights = weights.reindex(columns=assets).sort_index()
 
     rows = []
-    previous = None
+    drifted_weights = None
     for origin, target in mapping.items():
         if origin not in weights.index:
             continue
@@ -73,12 +73,10 @@ def run_backtest(weights: pd.DataFrame, realised: pd.DataFrame, mapping: pd.Seri
         if not np.isfinite(r).all():
             raise ValueError(f"{target.date()}: realised returns contain NaN")
 
-        if previous is None:
+        if drifted_weights is None:
             traded = float(np.abs(w).sum())   # buying the whole book from cash
         else:
-            grown = previous * (1.0 + r)
-            base = grown / grown.sum()        # weights drift with the market
-            traded = float(0.5 * np.abs(w - base).sum())
+            traded = float(0.5 * np.abs(w - drifted_weights).sum())
         gross = float(w @ r)
         cost = cost_bps / 1e4 * traded
         rows.append({
@@ -89,7 +87,8 @@ def run_backtest(weights: pd.DataFrame, realised: pd.DataFrame, mapping: pd.Seri
             "net": gross - cost,
             "turnover": traded,
         })
-        previous = w
+        holdings = w * (1.0 + r)
+        drifted_weights = holdings / holdings.sum()
 
     if not rows:
         raise ValueError("no origin produced a realised return")
@@ -110,7 +109,8 @@ def run_backtest(weights: pd.DataFrame, realised: pd.DataFrame, mapping: pd.Seri
 
 
 def run_models(weight_panels: dict[str, pd.DataFrame], realised: pd.DataFrame, mapping: pd.Series,
-               *, cost_bps: float = 0.0, benchmark: str = "1/N") -> dict[str, BacktestResult]:
+               *, cost_bps: float = 0.0, benchmark: str = "1/N",
+               eligibility: pd.DataFrame | None = None) -> dict[str, BacktestResult]:
     """Backtest every model in the Part 3 weight file plus the 1/N benchmark."""
     results = {
         name: run_backtest(panel, realised, mapping, name=name, cost_bps=cost_bps)
@@ -118,6 +118,9 @@ def run_models(weight_panels: dict[str, pd.DataFrame], realised: pd.DataFrame, m
     }
     origins = pd.DatetimeIndex(sorted(set().union(*(panel.index for panel in weight_panels.values()))))
     benchmark_weights = equal_weight(origins, list(realised.columns))
+    if eligibility is not None:
+        eligible = eligibility.loc[origins, realised.columns]
+        benchmark_weights = eligible.div(eligible.sum(axis=1), axis=0)
     results[benchmark] = run_backtest(benchmark_weights, realised, mapping, name=benchmark, cost_bps=cost_bps)
     return results
 

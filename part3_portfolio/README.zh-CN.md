@@ -17,7 +17,7 @@
 
 ~~~bash
 uv run python part3_portfolio/Part3.py               # real artifacts
-python part3_portfolio/Part3.py \
+uv run python part3_portfolio/Part3.py \
     --expected artifacts/sample/P1_Expected_Returns.csv \
     --covariance artifacts/sample/P2_Covariance.csv \
     --actual artifacts/sample/Actual_Returns.csv \
@@ -26,6 +26,8 @@ python part3_portfolio/Part3.py \
 
 默认设置：预期收益率取自 `artifacts/part1/P1_Expected_Returns.csv`（新版 FM 预测，与第 4 部分默认一致）；协方差取自 `artifacts/part2/P2_Covariance.csv`；实际收益率取自 `artifacts/part1/Actual_Returns.csv`；输出写入 `artifacts/part3/`。
 
+主预测按每月最后一个交易日收盘的黑名单和不可交易标记筛选资产。自定义预测可在 Part 3 和 Part 4 同时传入 `--tradability-data`。使用 `--max-weight 0.10` 可复现中期实验的单股权重上限。
+
 ## 输出
 
 | 文件 | 列 | 用途 |
@@ -33,5 +35,6 @@ python part3_portfolio/Part3.py \
 | Portfolio_Weights.csv | Date, Model, Asset, Weight | 供第 4 部分使用 |
 | OOS_Portfolio_Returns.csv | Date, Model, Portfolio_Return | 仅供核对 |
 | Forecast_Portfolio_Metrics.csv | Date, Model, Expected_Return, Expected_Volatility | 用于预测诊断 |
+| Tradability_Diagnostics.csv | Date, Excluded_Assets | 启用交易限制时生成 |
 
 投资组合不做空，且每个日期、每个模型的权重之和均为 1。交易成本、1/N 基准和所有统计检验均由第 4 部分处理。

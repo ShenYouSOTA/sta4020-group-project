@@ -11,8 +11,8 @@ out and the gap splits exactly into
     signal = sum_i (w_i - e_i) * (mu_i - mean(mu))      forecast capture
     timing = sum_i (w_i - e_i) * ((r_i - mean(r)) - (mu_i - mean(mu)))
 
-signal is the return the tilts were paid for; timing is the residual, i.e. how
-far this month's cross-section departed from the forecast.  Both are measured
+Signal is the forecast return associated with the tilts. Timing is the residual
+from realised returns differing from the forecast. Both are measured
 in the same units as the portfolio return, so they add up to the gap.
 """
 
@@ -25,7 +25,7 @@ from .contracts import DATE
 
 
 def decompose(weights: pd.DataFrame, expected: pd.DataFrame, realised: pd.DataFrame,
-              mapping: pd.Series) -> pd.DataFrame:
+              mapping: pd.Series, *, benchmark_weights: pd.DataFrame | None = None) -> pd.DataFrame:
     """Per-month gap decomposition for one model."""
     assets = list(realised.columns)
     rows = []
@@ -36,9 +36,12 @@ def decompose(weights: pd.DataFrame, expected: pd.DataFrame, realised: pd.DataFr
         mu = expected.loc[origin].reindex(assets).to_numpy(dtype=float)
         r = realised.loc[target].reindex(assets).to_numpy(dtype=float)
         equal = np.full(len(assets), 1.0 / len(assets))
+        if benchmark_weights is not None:
+            equal = benchmark_weights.loc[origin, assets].to_numpy(dtype=float)
+        eligible = equal > 0
         tilt = w - equal
-        mu_centred = mu - mu.mean()
-        r_centred = r - r.mean()
+        mu_centred = mu - mu[eligible].mean()
+        r_centred = r - r[eligible].mean()
         rows.append({
             "origin": origin,
             "realised_date": target,
@@ -47,8 +50,8 @@ def decompose(weights: pd.DataFrame, expected: pd.DataFrame, realised: pd.DataFr
             "gap": float(tilt @ r_centred),
             "signal": float(tilt @ mu_centred),
             "timing": float(tilt @ (r_centred - mu_centred)),
-            "forecast_dispersion": float(mu_centred.std(ddof=1)),
-            "realised_dispersion": float(r_centred.std(ddof=1)),
+            "forecast_dispersion": float(mu[eligible].std(ddof=1)),
+            "realised_dispersion": float(r[eligible].std(ddof=1)),
         })
     frame = pd.DataFrame(rows).set_index("realised_date").sort_index()
     if not np.allclose(frame["gap"], frame["signal"] + frame["timing"], atol=1e-12):

@@ -41,6 +41,8 @@ import numpy as np
 import pandas as pd
 from scipy.optimize import minimize
 
+from sta4020_project.tradability import load_eligibility
+
 # =====================================
 # 1. DEFAULTS
 # =====================================
@@ -154,20 +156,30 @@ def optimize_portfolio(mu, sigma: np.ndarray, method: str, *,
     individual_vol = np.sqrt(np.diag(sigma))
 
     def objective(w):
-        variance = w @ sigma @ w
+        marginal = sigma @ w
+        variance = w @ marginal
 
         if method == "Mean-Variance":
-            return -w @ mu + 0.5 * risk_aversion * variance
+            return -w @ mu + 0.5 * risk_aversion * variance, -mu + risk_aversion * marginal
 
         if method == "GMV":
-            return variance
+            return variance, 2 * marginal
+
+        denominator = max(variance, 1e-12)
+        variance_gradient = 2 * marginal if variance > 1e-12 else np.zeros_like(w)
 
         if method == "Maximum Diversification":
-            return -(w @ individual_vol) / np.sqrt(max(variance, 1e-12))
+            numerator = w @ individual_vol
+            volatility = np.sqrt(denominator)
+            gradient = (-individual_vol + 0.5 * numerator * variance_gradient / denominator)
+            return -numerator / volatility, gradient / volatility
 
         if method == "Risk Parity":
-            rc = w * (sigma @ w) / max(variance, 1e-12)
-            return np.sum((rc - 1 / n) ** 2)
+            contribution = w * marginal / denominator
+            error = contribution - 1 / n
+            gradient = (error * marginal + sigma @ (error * w)
+                        - (error @ contribution) * variance_gradient)
+            return error @ error, 2 * gradient / denominator
 
         raise ValueError(f"unknown method {method!r}")
 
@@ -175,8 +187,9 @@ def optimize_portfolio(mu, sigma: np.ndarray, method: str, *,
         objective,
         np.ones(n) / n,
         method="SLSQP",
+        jac=True,
         bounds=[(0.0, upper)] * n,
-        constraints=[{"type": "eq", "fun": lambda w: w.sum() - 1.0}],
+        constraints=[{"type": "eq", "fun": lambda w: w.sum() - 1.0, "jac": lambda w: np.ones(n)}],
         options={"maxiter": 2000, "ftol": 1e-12},
     )
 
@@ -241,7 +254,8 @@ def performance_summary(returns, *, periods_per_year: int = PERIODS_PER_YEAR,
 def build_portfolios(expected: pd.DataFrame, actual: pd.DataFrame,
                      covariance: pd.DataFrame, *,
                      risk_aversion: float = RISK_AVERSION,
-                     max_weight: float | None = MAX_WEIGHT):
+                     max_weight: float | None = MAX_WEIGHT,
+                     eligibility: pd.DataFrame | None = None):
     assets = sorted(set(expected.columns) & set(actual.columns))
     if len(assets) < 20:
         raise ValueError(f"at least 20 risky assets are required, got {len(assets)}")
@@ -253,7 +267,14 @@ def build_portfolios(expected: pd.DataFrame, actual: pd.DataFrame,
 
     for date, mu in expected.iterrows():
         try:
-            sigma = covariance_at(covariance, date, assets)
+            active = assets
+            if eligibility is not None:
+                eligible = eligibility.loc[date, assets]
+                active = eligible.index[eligible].tolist()
+            if not active or (max_weight is not None and len(active) * max_weight < 1 - 1e-12):
+                raise ValueError(f"weight constraints are infeasible for {len(active)} eligible assets")
+            mu = mu[active]
+            sigma = covariance_at(covariance, date, active)
             bl_mu = black_litterman(mu, sigma, risk_aversion=risk_aversion)
 
             portfolios = {
@@ -280,7 +301,8 @@ def build_portfolios(expected: pd.DataFrame, actual: pd.DataFrame,
                     "Expected_Return": float(weights @ np.asarray(model_mu, dtype=float)),
                     "Expected_Volatility": float(np.sqrt(weights @ sigma @ weights)),
                 })
-                for asset, weight in zip(assets, weights):
+                full_weights = pd.Series(weights, index=active).reindex(assets, fill_value=0)
+                for asset, weight in full_weights.items():
                     weight_records.append({
                         "Date": date, "Model": model, "Asset": asset, "Weight": float(weight),
                     })
@@ -298,12 +320,11 @@ def build_portfolios(expected: pd.DataFrame, actual: pd.DataFrame,
                 return_records.append({
                     "Date": next_date,
                     "Model": model,
-                    "Portfolio_Return": float(weights @ realised.to_numpy(dtype=float)),
+                    "Portfolio_Return": float(weights @ realised[active].to_numpy(dtype=float)),
                 })
 
         except (ValueError, FileNotFoundError, np.linalg.LinAlgError) as error:
-            warnings.warn(f"{date}: {error}")
-            continue
+            raise ValueError(f"{date.date()}: {error}") from error
 
     weights_df = pd.DataFrame(weight_records, columns=["Date", "Model", "Asset", "Weight"])
     returns_df = pd.DataFrame(return_records, columns=["Date", "Model", "Portfolio_Return"])
@@ -349,6 +370,8 @@ def build_parser() -> argparse.ArgumentParser:
                         help="long format covariance panel")
     parser.add_argument("--actual", type=Path, default=default_actual_returns(),
                         help="realised returns panel")
+    parser.add_argument("--tradability-data", type=Path,
+                        help="directory for vendor flags; defaults to data/ for the main forecast")
     parser.add_argument("--output-dir", type=Path, default=default_output_dir(),
                         help="where the CSVs are written")
     parser.add_argument("--risk-aversion", type=float, default=RISK_AVERSION,
@@ -379,12 +402,22 @@ def main(argv=None) -> int:
     print(f"actual returns:   {arguments.actual}")
 
     try:
+        data_dir = arguments.tradability_data
+        if data_dir is None and arguments.expected.resolve() == default_expected_returns():
+            data_dir = PROJECT / "data"
+        eligibility = None
+        if data_dir is not None:
+            assets = sorted(set(expected.columns) & set(actual.columns))
+            eligibility = load_eligibility(data_dir, expected.index, assets)
+            dropped = len(assets) - eligibility.sum(axis=1)
+            print(f"excluded assets per origin: min={dropped.min()} max={dropped.max()}")
         weights_df, returns_df, forecasts_df = build_portfolios(
             expected, actual, covariance,
             risk_aversion=arguments.risk_aversion,
             max_weight=arguments.max_weight,
+            eligibility=eligibility,
         )
-    except ValueError as error:
+    except (ValueError, FileNotFoundError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
 
@@ -406,6 +439,10 @@ def main(argv=None) -> int:
     print(summary.round(4).to_string())
 
     written = write_outputs(arguments.output_dir, weights_df, returns_df, forecasts_df)
+    if eligibility is not None:
+        dropped.rename("Excluded_Assets").rename_axis("Date").to_csv(
+            arguments.output_dir / "Tradability_Diagnostics.csv"
+        )
     print("\nResults saved in:", arguments.output_dir)
     for label, path in written.items():
         print(f"  {label}: {path.name}")

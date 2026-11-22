@@ -43,3 +43,17 @@ def test_weight_diagnostics_are_one_row_per_origin():
     assert len(frame) == 2
     assert np.isnan(frame["turnover"].iloc[0])          # nothing traded before the first origin
     assert frame["turnover"].iloc[1] == pytest.approx(0.2)
+
+
+def test_attribution_uses_the_benchmark_weights_on_eligible_assets():
+    origin = pd.to_datetime(["2024-01-31"])
+    target = pd.to_datetime(["2024-02-29"])
+    assets = ["a", "b", "excluded"]
+    expected = wide([[0.02, 0, 0.1]], origin, assets)
+    realised = wide([[0.04, 0, 0.3]], target, assets)
+    weights = wide([[1, 0, 0]], origin, assets)
+    benchmark = wide([[0.5, 0.5, 0]], origin, assets)
+    frame = attribution.decompose(weights, expected, realised, contracts.target_dates(origin, target),
+                                  benchmark_weights=benchmark)
+    assert frame.iloc[0]["benchmark"] == pytest.approx(0.02)
+    assert frame.iloc[0]["gap"] == pytest.approx(0.02)

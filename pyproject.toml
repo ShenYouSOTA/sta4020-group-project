@@ -19,6 +19,12 @@ sta4020-check-data = "sta4020_project.checks:check_data"
 sta4020-check-artifacts = "sta4020_project.checks:check_artifacts"
 sta4020-sample = "sta4020_project.sample_pipeline:main"
 sta4020-evaluate = "sta4020_project.cli:main"
+sta4020-build-risk = "sta4020_project.risk:main"
+
+[project.optional-dependencies]
+risk = [
+    "sta4020-risk-model",
+]
 
 [dependency-groups]
 dev = ["pytest>=8"]
@@ -32,3 +38,6 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+
+[tool.uv.sources]
+sta4020-risk-model = { path = "part2_risk_model", editable = true }
