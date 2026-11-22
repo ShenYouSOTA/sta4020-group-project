@@ -27,3 +27,8 @@ __pycache__/
 .vscode/
 .DS_Store
 *:Zone.Identifier
+
+# Final experiment outputs
+artifacts/part1/final/
+artifacts/part2/final/
+artifacts/part3/final*/

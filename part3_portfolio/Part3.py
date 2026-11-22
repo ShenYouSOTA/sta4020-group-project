@@ -41,6 +41,8 @@ import numpy as np
 import pandas as pd
 from scipy.optimize import minimize
 
+from sta4020_project.cli import monthly_risk_free
+from sta4020_project.risk import monthly_panel
 from sta4020_project.tradability import load_eligibility
 
 # =====================================
@@ -209,18 +211,19 @@ def optimize_portfolio(mu, sigma: np.ndarray, method: str, *,
 
 
 def black_litterman(mu, sigma: np.ndarray, *,
-                    risk_aversion: float = RISK_AVERSION) -> np.ndarray:
+                    risk_aversion: float = RISK_AVERSION,
+                    market_weights: np.ndarray | None = None, risk_free: float = 0.0) -> np.ndarray:
     n = len(mu)
-    market_weights = np.ones(n) / n
+    market_weights = np.ones(n) / n if market_weights is None else market_weights
     prior = risk_aversion * sigma @ market_weights
 
     tau = 0.05
     P = np.eye(n)
-    Q = np.asarray(mu, dtype=float)
+    Q = np.asarray(mu, dtype=float) - risk_free
     omega = np.diag(np.diag(tau * sigma) / 0.5)
 
     middle = P @ (tau * sigma) @ P.T + omega
-    return prior + tau * sigma @ P.T @ np.linalg.solve(middle, Q - P @ prior)
+    return risk_free + prior + tau * sigma @ P.T @ np.linalg.solve(middle, Q - P @ prior)
 
 
 # =====================================
@@ -255,7 +258,9 @@ def build_portfolios(expected: pd.DataFrame, actual: pd.DataFrame,
                      covariance: pd.DataFrame, *,
                      risk_aversion: float = RISK_AVERSION,
                      max_weight: float | None = MAX_WEIGHT,
-                     eligibility: pd.DataFrame | None = None):
+                     eligibility: pd.DataFrame | None = None,
+                     market_caps: pd.DataFrame | None = None,
+                     origin_risk_free: pd.Series | float = 0.0):
     assets = sorted(set(expected.columns) & set(actual.columns))
     if len(assets) < 20:
         raise ValueError(f"at least 20 risky assets are required, got {len(assets)}")
@@ -275,7 +280,15 @@ def build_portfolios(expected: pd.DataFrame, actual: pd.DataFrame,
                 raise ValueError(f"weight constraints are infeasible for {len(active)} eligible assets")
             mu = mu[active]
             sigma = covariance_at(covariance, date, active)
-            bl_mu = black_litterman(mu, sigma, risk_aversion=risk_aversion)
+            prior_weights = None
+            if market_caps is not None:
+                caps = market_caps.loc[date, active].to_numpy(dtype=float)
+                if not np.isfinite(caps).all() or (caps <= 0).any():
+                    raise ValueError("eligible assets must have observed positive market caps")
+                prior_weights = caps / caps.sum()
+            rf = origin_risk_free.loc[date] if isinstance(origin_risk_free, pd.Series) else origin_risk_free
+            bl_mu = black_litterman(mu, sigma, risk_aversion=risk_aversion,
+                                     market_weights=prior_weights, risk_free=rf)
 
             portfolios = {
                 "Mean-Variance Optimization":
@@ -376,6 +389,10 @@ def build_parser() -> argparse.ArgumentParser:
                         help="where the CSVs are written")
     parser.add_argument("--risk-aversion", type=float, default=RISK_AVERSION,
                         help="risk aversion in the mean-variance objective")
+    parser.add_argument("--risk-free-data", type=Path,
+                        help="daily risk_free.csv to convert Black–Litterman total views to excess views")
+    parser.add_argument("--market-caps", type=Path,
+                        help="monthly mcap.pkl for a capitalization-weighted Black–Litterman prior")
     parser.add_argument("--max-weight", type=float, default=MAX_WEIGHT,
                         help="optional upper bound on any single weight")
     parser.add_argument("--periods-per-year", type=int, default=PERIODS_PER_YEAR,
@@ -411,11 +428,16 @@ def main(argv=None) -> int:
             eligibility = load_eligibility(data_dir, expected.index, assets)
             dropped = len(assets) - eligibility.sum(axis=1)
             print(f"excluded assets per origin: min={dropped.min()} max={dropped.max()}")
+        market_caps = (monthly_panel(pd.read_pickle(arguments.market_caps), expected.index, expected.columns)
+                       if arguments.market_caps is not None else None)
+        origin_risk_free = monthly_risk_free(arguments.risk_free_data, expected.index)
+        if arguments.risk_free_data is not None and not isinstance(origin_risk_free, pd.Series):
+            raise ValueError("valid daily risk-free data is required when --risk-free-data is specified")
         weights_df, returns_df, forecasts_df = build_portfolios(
             expected, actual, covariance,
             risk_aversion=arguments.risk_aversion,
             max_weight=arguments.max_weight,
-            eligibility=eligibility,
+            eligibility=eligibility, market_caps=market_caps, origin_risk_free=origin_risk_free,
         )
     except (ValueError, FileNotFoundError) as error:
         print(f"error: {error}", file=sys.stderr)

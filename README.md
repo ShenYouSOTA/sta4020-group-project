@@ -70,6 +70,25 @@ Part 4. Use `--tradability-data` on both commands for a custom forecast.
 `--cost-sweep 0,10,30,50` (the default) adds the cost-sensitivity table; pass
 `--cost-sweep ''` to skip it.
 
+## Final experiment
+
+Run the final pipeline from the repository root with the course data in `data/`.
+The locked `final` extra adds h5py for the original Part 1 daily features. The
+pipeline extracts the descriptor archive once and saves all final outputs
+under a separate `final` tag. Supply `--descriptors /path/to/descriptors.pkl` to
+reuse a trusted extracted copy.
+
+~~~bash
+OPENBLAS_NUM_THREADS=1 uv run --locked --extra risk --extra final python -m sta4020_project.final_pipeline
+uv run --locked --extra risk --extra final pytest tests part2_risk_model/tests
+typst compile --root . docs/final_report.typ part4_evaluation/reports/final/Final_Report.pdf
+typst compile --root . docs/final_slides.typ part4_evaluation/reports/final/Final_Slides.pdf
+~~~
+
+The model selection, input hashes, experiment commands and output tables are in
+`part4_evaluation/reports/final/`. See the [experiment design](docs/FINAL_EXPERIMENT_DESIGN.md)
+for the comparison and execution rules.
+
 ## Raw data
 
 data/ is not committed: the payload is 530 MB and ships with the course

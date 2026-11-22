@@ -38,3 +38,27 @@ def test_factor_covariance_ignores_future_rows():
         origin = dates[[index]]
         np.testing.assert_allclose(next(factor_covariances(changed, origin)),
                                    next(factor_covariances(panel, origin)))
+
+
+def test_broad_forecast_ignores_next_realization_and_future_styles():
+    pytest.importorskip("risk_model.factor_model")
+    from sta4020_project.broad_risk import estimate_history, forecast_components
+
+    rng = np.random.default_rng(42)
+    dates = pd.date_range("2008-01-01", periods=12, freq="ME")
+    assets = pd.Index([f"S{i}" for i in range(120)])
+    returns = pd.DataFrame(rng.normal(size=(12, 120)), index=dates, columns=assets)
+    caps = pd.DataFrame(1.0, index=dates, columns=assets)
+    size = pd.DataFrame(rng.normal(size=(12, 120)), index=dates, columns=assets)
+    args = (assets[:50], dates[2])
+    history = estimate_history(returns, caps, {"size": size}, *args)
+    perturbed = returns.copy()
+    perturbed.iloc[8:, :20] = np.nan
+    altered = size.copy()
+    altered.iloc[8:] *= -10
+    changed = estimate_history(perturbed, caps, {"size": altered}, *args)
+    for old, new in zip(next(forecast_components(history, dates[[7]])),
+                        next(forecast_components(changed, dates[[7]])), strict=True):
+        np.testing.assert_allclose(old, new)
+    pd.testing.assert_series_equal(history.coverage.iloc[7][["Formation", "Realization"]],
+                                   pd.Series([dates[7], dates[8]], index=["Formation", "Realization"], name=7, dtype=object))

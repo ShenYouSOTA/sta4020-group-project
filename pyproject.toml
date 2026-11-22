@@ -25,6 +25,9 @@ sta4020-build-risk = "sta4020_project.risk:main"
 risk = [
     "sta4020-risk-model",
 ]
+final = [
+    "h5py>=3.10",
+]
 
 [dependency-groups]
 dev = ["pytest>=8"]

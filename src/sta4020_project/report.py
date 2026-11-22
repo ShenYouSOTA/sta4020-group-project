@@ -53,9 +53,11 @@ def comparison_table(results: dict[str, BacktestResult], benchmark: str,
             continue
         common = result.returns.index.intersection(base.returns.index)
         active = result.returns.loc[common] - base.returns.loc[common]
-        test = inference.sharpe_difference_test(result.returns.loc[common], base.returns.loc[common])
-        alpha = inference.alpha_vs_benchmark(result.returns.loc[common], base.returns.loc[common],
-                                            periods_per_year)
+        rf = risk_free.reindex(common) if isinstance(risk_free, pd.Series) else risk_free
+        strategy_excess = result.returns.loc[common] - rf
+        benchmark_excess = base.returns.loc[common] - rf
+        test = inference.sharpe_difference_test(strategy_excess, benchmark_excess)
+        alpha = inference.alpha_vs_benchmark(strategy_excess, benchmark_excess, periods_per_year)
         rows[name] = {
             "Excess annualized return": (metric.annualized_return(result.returns, periods_per_year)
                                          - metric.annualized_return(base.returns, periods_per_year)),
@@ -195,10 +197,12 @@ def write_report(results: dict[str, BacktestResult], benchmark: str, out_dir: Pa
     written["oos_returns"] = str(out_dir / "tables" / "oos_returns.csv")
 
     if attribution_tables:
+        attribution_dir = out_dir / "tables" / "attribution"
+        attribution_dir.mkdir(exist_ok=True)
         for label, frame in attribution_tables.items():
-            path = out_dir / "tables" / f"{label}.csv"
+            path = attribution_dir / f"{label}.csv"
             frame.to_csv(path)
-            written[label] = str(path)
+            written[f"attribution {label}"] = str(path)
     if diagnostics:
         for label, frame in diagnostics.items():
             path = out_dir / "tables" / f"{label}.csv"
@@ -265,16 +269,6 @@ def write_report(results: dict[str, BacktestResult], benchmark: str, out_dir: Pa
         for label, frame in diagnostics.items():
             summary = frame.describe().T[["mean", "std", "min", "max"]]
             lines += [f"### {label}", "", _markdown_table(summary), ""]
-
-    lines += ["## Interpretation prompts (to be written by the Part 4 author)", "",
-              "1. Which strategy wins on Sharpe, and does the z-statistic support it at 5%?",
-              "2. Is the gap driven by signal (the Part 1 return forecast) or by timing (luck)?",
-              "3. How much of the gap survives the transaction-cost assumption, and at what cost level "
-              "does the ranking flip?",
-              "4. Are the winning weights concentrated (effective N) or diversified, and what does that say "
-              "about the Part 2 covariance estimate?",
-              "5. Which subperiods drive the result, and can they be linked to a specific modelling choice "
-              "in Parts 1-3?", ""]
 
     report_path = out_dir / "REPORT.md"
     report_path.write_text("\n".join(lines), encoding="utf-8")

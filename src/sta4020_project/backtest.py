@@ -13,6 +13,7 @@ from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
+from scipy.optimize import brentq
 
 from . import metrics as metric
 
@@ -42,8 +43,27 @@ def equal_weight(origins: pd.Index, assets: list[str]) -> pd.DataFrame:
     return pd.DataFrame(1.0 / len(columns), index=pd.DatetimeIndex(origins), columns=columns)
 
 
+def execute_rebalance(target, previous, suspended, cost_rate):
+    """Solve the post-fee stock budget while keeping suspended shares fixed."""
+    if not 0 <= cost_rate < 1:
+        raise ValueError("per-side transaction cost must be in [0, 1)")
+    if np.any(target[suspended] > 1e-10):
+        raise ValueError("target requires purchases in a suspended name")
+    frozen = np.where(suspended, previous, 0.0)
+    budget = 1.0 - frozen.sum()
+
+    def turnover(fee):
+        holdings = frozen + target * (budget - fee)
+        return np.abs(holdings - previous).sum()
+
+    fee = (brentq(lambda value: value - cost_rate * turnover(value), 0.0, budget,
+                  xtol=1e-14) if cost_rate and budget > 0 else 0.0)
+    return (frozen + target * (budget - fee)) / (1.0 - fee), turnover(fee), fee
+
+
 def run_backtest(weights: pd.DataFrame, realised: pd.DataFrame, mapping: pd.Series,
-                 *, name: str = "", cost_bps: float = 0.0) -> BacktestResult:
+                 *, name: str = "", cost_bps: float = 0.0,
+                 suspensions: pd.DataFrame | None = None) -> BacktestResult:
     """Simulate one weight path.
 
     weights   : origin x asset target weights (already long-only, sum to one)
@@ -54,7 +74,7 @@ def run_backtest(weights: pd.DataFrame, realised: pd.DataFrame, mapping: pd.Seri
     assets = list(realised.columns)
     weights = weights.reindex(columns=assets).sort_index()
 
-    rows = []
+    rows, executed = [], []
     drifted_weights = None
     for origin, target in mapping.items():
         if origin not in weights.index:
@@ -73,21 +93,30 @@ def run_backtest(weights: pd.DataFrame, realised: pd.DataFrame, mapping: pd.Seri
         if not np.isfinite(r).all():
             raise ValueError(f"{target.date()}: realised returns contain NaN")
 
-        if drifted_weights is None:
-            traded = float(np.abs(w).sum())   # buying the whole book from cash
+        if suspensions is not None:
+            previous = np.zeros_like(w) if drifted_weights is None else drifted_weights
+            blocked = suspensions.loc[origin, assets].to_numpy(dtype=bool)
+            w, traded, cost = execute_rebalance(w, previous, blocked, cost_bps / 1e4)
+            gross = float(w @ r)
+            net = (1.0 - cost) * (1.0 + gross) - 1.0
         else:
-            traded = float(0.5 * np.abs(w - drifted_weights).sum())
-        gross = float(w @ r)
-        cost = cost_bps / 1e4 * traded
+            traded = (float(np.abs(w).sum()) if drifted_weights is None
+                      else float(0.5 * np.abs(w - drifted_weights).sum()))
+            gross = float(w @ r)
+            cost = cost_bps / 1e4 * traded
+            net = gross - cost
+        executed.append(w)
         rows.append({
             "origin": origin,
             "realised_date": target,
             "gross": gross,
             "cost": cost,
-            "net": gross - cost,
+            "net": net,
             "turnover": traded,
         })
         holdings = w * (1.0 + r)
+        if holdings.sum() <= 0:
+            raise ValueError(f"{target.date()}: portfolio wealth exhausted")
         drifted_weights = holdings / holdings.sum()
 
     if not rows:
@@ -104,16 +133,17 @@ def run_backtest(weights: pd.DataFrame, realised: pd.DataFrame, mapping: pd.Seri
         gross_returns=table["gross"].sort_index(),
         costs=table["cost"].sort_index(),
         turnovers=table.set_index("origin")["turnover"].sort_index(),
-        weights=weights.loc[[origin for origin in table["origin"]]],
+        weights=pd.DataFrame(executed, index=pd.DatetimeIndex(table["origin"]), columns=assets),
     )
 
 
 def run_models(weight_panels: dict[str, pd.DataFrame], realised: pd.DataFrame, mapping: pd.Series,
                *, cost_bps: float = 0.0, benchmark: str = "1/N",
-               eligibility: pd.DataFrame | None = None) -> dict[str, BacktestResult]:
+               eligibility: pd.DataFrame | None = None,
+               suspensions: pd.DataFrame | None = None) -> dict[str, BacktestResult]:
     """Backtest every model in the Part 3 weight file plus the 1/N benchmark."""
     results = {
-        name: run_backtest(panel, realised, mapping, name=name, cost_bps=cost_bps)
+        name: run_backtest(panel, realised, mapping, name=name, cost_bps=cost_bps, suspensions=suspensions)
         for name, panel in weight_panels.items()
     }
     origins = pd.DatetimeIndex(sorted(set().union(*(panel.index for panel in weight_panels.values()))))
@@ -121,7 +151,7 @@ def run_models(weight_panels: dict[str, pd.DataFrame], realised: pd.DataFrame, m
     if eligibility is not None:
         eligible = eligibility.loc[origins, realised.columns]
         benchmark_weights = eligible.div(eligible.sum(axis=1), axis=0)
-    results[benchmark] = run_backtest(benchmark_weights, realised, mapping, name=benchmark, cost_bps=cost_bps)
+    results[benchmark] = run_backtest(benchmark_weights, realised, mapping, name=benchmark, cost_bps=cost_bps, suspensions=suspensions)
     return results
 
 

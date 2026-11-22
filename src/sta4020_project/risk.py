@@ -83,8 +83,9 @@ def main(argv=None):
     parser.add_argument("--data-dir", type=Path, default=paths.root / "data")
     parser.add_argument("--output", type=Path, default=paths.covariance)
     parser.add_argument("--history-start", default="2013-01")
-    parser.add_argument("--method", choices=["sample", "ledoit-wolf", "factor"], default="sample")
+    parser.add_argument("--method", choices=["sample", "ledoit-wolf", "factor", "broad-factor"], default="sample")
     parser.add_argument("--descriptors", type=Path, help="optional extracted descriptors.pkl")
+    parser.add_argument("--broad-start", default="2005-01")
     args = parser.parse_args(argv)
 
     expected = read_wide(args.expected)
@@ -98,6 +99,15 @@ def main(argv=None):
     returns = monthly_panel(pd.read_pickle(args.data_dir / "monthly_returns.pkl"), dates, assets)
     if not origins.isin(dates).all() or not np.isfinite(returns.to_numpy()).all():
         raise ValueError("monthly returns must cover every asset and month in the estimation window")
+
+    if args.method == "broad-factor":
+        from .broad_risk import load_history, write_broad_risk
+
+        history = load_history(args.data_dir, args.descriptors, origins, pd.Index(assets),
+                               dates[0], args.broad_start)
+        write_broad_risk(args.output, history, origins, assets)
+        print(f"broad-factor: wrote {len(origins)} covariance blocks for {len(assets)} assets to {args.output}")
+        return 0
 
     if args.method == "factor":
         from .styles import factor_covariances, load_risk_panel

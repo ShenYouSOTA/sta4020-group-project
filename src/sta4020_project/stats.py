@@ -115,12 +115,10 @@ def newey_west_tstat(values, lags: int | None = None) -> dict:
     }
 
 
-def alpha_vs_benchmark(returns, benchmark, periods_per_year: int = PERIODS_PER_YEAR) -> dict:
-    """Jensen's alpha on the benchmark, with a Newey-West t-statistic."""
-    a, b = _aligned(returns, benchmark)
-    design = np.column_stack([np.ones_like(b), b])
-    coefficients, *_ = np.linalg.lstsq(design, a, rcond=None)
-    residuals = a - design @ coefficients
+def hac_regression(design, response):
+    """OLS coefficients, residuals and a Bartlett Newey-West covariance."""
+    coefficients, *_ = np.linalg.lstsq(design, response, rcond=None)
+    residuals = response - design @ coefficients
     n, k = design.shape
     if n <= k:
         raise ValueError("not enough observations for a regression")
@@ -139,7 +137,15 @@ def alpha_vs_benchmark(returns, benchmark, periods_per_year: int = PERIODS_PER_Y
             moment = moment + moment.T
         meat += weight * moment
     covariance = bread @ meat @ bread
-    standard_error = float(np.sqrt(np.diag(covariance)[0]))
+    return coefficients, residuals, covariance
+
+
+def alpha_vs_benchmark(returns, benchmark, periods_per_year: int = PERIODS_PER_YEAR) -> dict:
+    """Jensen's alpha on the benchmark, with a Newey-West t-statistic."""
+    a, b = _aligned(returns, benchmark)
+    design = np.column_stack([np.ones_like(b), b])
+    coefficients, residuals, covariance = hac_regression(design, a)
+    standard_error = float(np.sqrt(covariance[0, 0]))
     alpha = float(coefficients[0])
     return {
         "alpha_period": alpha,
@@ -147,5 +153,5 @@ def alpha_vs_benchmark(returns, benchmark, periods_per_year: int = PERIODS_PER_Y
         "t_statistic": float(alpha / standard_error) if standard_error > 0 else float("nan"),
         "beta": float(coefficients[1]),
         "r_squared": float(1.0 - residuals.var(ddof=1) / a.var(ddof=1)),
-        "n": int(n),
+        "n": len(a),
     }

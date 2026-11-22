@@ -27,7 +27,7 @@ STYLES = {
 }
 
 
-def descriptor_fields(data_dir, extracted_path, dates, assets):
+def descriptor_fields(data_dir, extracted_path, dates, assets, names=None):
     """Read the vendor pickle and retain only the required monthly fields."""
     if extracted_path is not None:
         with extracted_path.open("rb") as handle:
@@ -42,9 +42,10 @@ def descriptor_fields(data_dir, extracted_path, dates, assets):
             descriptors = pickle.load(handle)
 
     fields = {}
-    for name in {field for components in STYLES.values() for field in components}:
+    for name in sorted(names or {field for components in STYLES.values() for field in components}):
         series = descriptors[name]
-        mask = series.index.get_level_values("asset").isin(assets)
+        mask = (series.index.get_level_values("asset").isin(assets)
+                & series.index.get_level_values("date").to_period("M").isin(dates.to_period("M")))
         fields[name] = monthly_panel(series[mask].unstack("asset"), dates, assets)
     return fields
 
@@ -64,6 +65,23 @@ def transform_component(frame, *, log, reverse, standardize):
     return -frame if reverse else frame
 
 
+def build_styles(fields):
+    styles = {}
+    for name, fields_for_style in STYLES.items():
+        components = [
+            transform_component(
+                fields[field], log=field in {"mktcap", "turnover_252"},
+                reverse=field in {"momentum_21", "accrual_to_asset_ttm"},
+                standardize=len(fields_for_style) > 1,
+            )
+            for field in fields_for_style
+        ]
+        style = pd.concat(components).groupby(level=0).mean()
+        styles[name] = style
+
+    return styles
+
+
 def load_risk_panel(data_dir, returns, extracted_path=None):
     dates, assets = returns.index, returns.columns
     fields = descriptor_fields(data_dir, extracted_path, dates, assets)
@@ -78,21 +96,12 @@ def load_risk_panel(data_dir, returns, extracted_path=None):
         for frame in fields.values():
             frame.loc[delisted, DELISTED_ASSET] = np.nan
 
-    styles, missing = [], {}
-    for name, fields_for_style in STYLES.items():
-        components = [
-            transform_component(
-                fields[field], log=field in {"mktcap", "turnover_252"},
-                reverse=field in {"momentum_21", "accrual_to_asset_ttm"},
-                standardize=len(fields_for_style) > 1,
-            )
-            for field in fields_for_style
-        ]
-        style = pd.concat(components).groupby(level=0).mean()
-        if DELISTED_ASSET in assets:
-            style[DELISTED_ASSET] = style[DELISTED_ASSET].where(~delisted, style[DELISTED_ASSET].ffill())
-        missing[name] = style.isna().mean(axis=1)
-        styles.append(style.T.fillna(style.median(axis=1)).T.to_numpy())
+    styles = build_styles(fields)
+    if DELISTED_ASSET in assets:
+        for style in styles.values():
+            style[DELISTED_ASSET] = style[DELISTED_ASSET].ffill().where(delisted, style[DELISTED_ASSET])
+    missing = {name: style.isna().mean(axis=1) for name, style in styles.items()}
+    filled = [style.T.fillna(style.median(axis=1)).T.to_numpy() for style in styles.values()]
 
     risk_free = monthly_risk_free(data_dir / "risk_free.csv", dates)
     if not isinstance(risk_free, pd.Series):
@@ -100,7 +109,7 @@ def load_risk_panel(data_dir, returns, extracted_path=None):
     panel = RiskPanel(
         dates=dates.to_numpy(), asset_ids=assets.to_numpy(),
         returns=returns.sub(risk_free, axis=0).to_numpy(),
-        style_values=np.stack(styles, axis=-1), style_ids=np.array(list(STYLES)),
+        style_values=np.stack(filled, axis=-1), style_ids=np.array(list(STYLES)),
         industry_membership=np.full(returns.shape, "Market"), industry_ids=np.array(["Market"]),
         market_caps=caps.to_numpy(),
     )

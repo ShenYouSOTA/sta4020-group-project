@@ -74,21 +74,29 @@ def fit_factor_model(panel):
     fitted = np.empty((times - 1, factors))
     residuals = np.empty((times - 1, stocks))
     for t in range(times - 1):
-        shares = cap_weights[t] @ dummies[t]
-        constraint = np.zeros((factors, factors - 1))
-        constraint[:industries, :industries] = np.eye(industries)
-        constraint[industries, 1:industries] = -shares[:-1] / shares[-1]
-        constraint[industries + 1:, industries:] = np.eye(style_count)
-        weights = np.sqrt(caps[t])
-        weights /= weights.sum()
-        root_weights = np.sqrt(weights)
-        design = root_weights[:, None] * (exposures[t] @ constraint)
-        left, singular, right = np.linalg.svd(design, full_matrices=False)
-        cutoff = np.finfo(float).eps * max(design.shape) * singular[0]
-        if len(singular) != factors - 1 or np.any(singular <= cutoff):
-            raise ValueError(f"constrained design is rank deficient at row {t}")
-        inverse_design = (right.T / singular) @ left.T
-        holdings[t] = (constraint @ inverse_design) * root_weights
+        holdings[t] = factor_holdings(exposures[t], caps[t], dummies[t])
         fitted[t] = holdings[t] @ returns[t + 1]
         residuals[t] = returns[t + 1] - exposures[t] @ fitted[t]
     return FactorResult(fitted, residuals, exposures, holdings)
+
+
+def factor_holdings(exposures, caps, dummies):
+    """Constrained WLS portfolios for one cross-section with supplied exposures."""
+    factors = exposures.shape[1]
+    industries = dummies.shape[1]
+    style_count = factors - industries - 1
+    shares = (caps / caps.sum()) @ dummies
+    constraint = np.zeros((factors, factors - 1))
+    constraint[:industries, :industries] = np.eye(industries)
+    constraint[industries, 1:industries] = -shares[:-1] / shares[-1]
+    constraint[industries + 1:, industries:] = np.eye(style_count)
+    weights = np.sqrt(caps)
+    weights /= weights.sum()
+    root_weights = np.sqrt(weights)
+    design = root_weights[:, None] * (exposures @ constraint)
+    left, singular, right = np.linalg.svd(design, full_matrices=False)
+    cutoff = np.finfo(float).eps * max(design.shape) * singular[0]
+    if len(singular) != factors - 1 or np.any(singular <= cutoff):
+        raise ValueError("constrained design is rank deficient")
+    inverse_design = (right.T / singular) @ left.T
+    return (constraint @ inverse_design) * root_weights

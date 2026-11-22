@@ -22,7 +22,7 @@ from . import contracts
 from . import report as report_module
 from .backtest import DEFAULT_WINDOWS, run_models, subperiod_performance
 from .contracts import Paths
-from .tradability import load_eligibility
+from .tradability import load_eligibility, load_suspensions
 
 BENCHMARK = "1/N"
 
@@ -49,12 +49,13 @@ def monthly_risk_free(path: Path | None, dates: pd.Index) -> pd.Series | float:
 def cost_sensitivity(panels: dict[str, pd.DataFrame], realised: pd.DataFrame,
                      mapping: pd.Series, levels, *, risk_free=0.0,
                      periods_per_year: int = 12, benchmark: str = BENCHMARK,
-                     eligibility: pd.DataFrame | None = None) -> pd.DataFrame:
+                     eligibility: pd.DataFrame | None = None,
+                     suspensions: pd.DataFrame | None = None) -> pd.DataFrame:
     """Metrics for every model at every cost level, as a tidy long table."""
     rows = []
     for level in levels:
         results = run_models(panels, realised, mapping, cost_bps=level, benchmark=benchmark,
-                             eligibility=eligibility)
+                             eligibility=eligibility, suspensions=suspensions)
         for name, result in results.items():
             values = result.metrics(risk_free=risk_free, periods_per_year=periods_per_year)
             rows.append({
@@ -73,7 +74,7 @@ def evaluate(weights_path: Path, expected_path: Path, actual_path: Path, out_dir
              risk_free_path: Path | None = None, cost_bps: float = 0.0,
              make_figures: bool = True, windows: dict | None = None,
              cost_levels=None, weights_label: str | None = None,
-             tradability_data: Path | None = None) -> dict:
+             tradability_data: Path | None = None, freeze_suspensions: bool = False, per_side_cost: bool = False) -> dict:
     """Run the full Part 4 evaluation and return the written paths."""
     expected = contracts.read_wide(expected_path, label=Path(expected_path).name)
     actual = contracts.read_wide(actual_path, label="Actual_Returns")
@@ -97,13 +98,19 @@ def evaluate(weights_path: Path, expected_path: Path, actual_path: Path, out_dir
         if eligibility is not None and (panel.where(~eligibility).abs() > 1e-10).any().any():
             raise ValueError(f"{name}: nonzero weights on ineligible assets")
 
+    if freeze_suspensions and tradability_data is None:
+        raise ValueError("frozen execution requires tradability data")
+    suspensions = load_suspensions(tradability_data, expected.index, assets) if freeze_suspensions else None
+    if per_side_cost and suspensions is None:
+        suspensions = pd.DataFrame(False, index=expected.index, columns=assets)
     risk_free = monthly_risk_free(risk_free_path, mapping.values)
     results = run_models(panels, actual, mapping, cost_bps=cost_bps, benchmark=BENCHMARK,
-                         eligibility=eligibility)
+                         eligibility=eligibility, suspensions=suspensions)
 
     attribution_tables = {}
     diagnostics = {}
-    for name, panel in panels.items():
+    for name in panels:
+        panel = results[name].weights
         decomposition = attribution_module.decompose(
             panel, expected, actual, mapping, benchmark_weights=results[BENCHMARK].weights
         )
@@ -127,6 +134,9 @@ def evaluate(weights_path: Path, expected_path: Path, actual_path: Path, out_dir
         "origins": len(panels[list(panels)[0]].index) if panels else 0,
         "realised months": len(realised_dates),
         "transaction cost (bp, one-way)": cost_bps,
+        "execution": ("frozen suspended holdings, per-side cash-funded cost" if freeze_suspensions
+                      else "immediate targets, per-side cash-funded cost" if per_side_cost
+                      else "immediate targets, half-L1 turnover cost after inception"),
         "first realised month": str(realised_dates.min().date()),
         "last realised month": str(realised_dates.max().date()),
     }
@@ -135,11 +145,20 @@ def evaluate(weights_path: Path, expected_path: Path, actual_path: Path, out_dir
     sensitivity = None
     if cost_levels:
         sensitivity = cost_sensitivity(panels, actual, mapping, cost_levels,
-                                       risk_free=risk_free, eligibility=eligibility)
+                                       risk_free=risk_free, eligibility=eligibility, suspensions=suspensions)
     written = report_module.write_report(
         results, BENCHMARK, out_dir, risk_free=risk_free, attribution_tables=attribution_tables,
         diagnostics=diagnostics, config=config, make_figures=make_figures,
         sensitivity=sensitivity)
+
+    if suspensions is not None:
+        execution_rows = []
+        for name, result in results.items():
+            result.weights.to_csv(out_dir / "tables" / f"executed_{name.replace('/', '_')}.csv", index_label="Date")
+            frozen = result.weights.where(suspensions, 0.0).sum(axis=1)
+            execution_rows.append({"Model": name, "MonthsWithFrozenHoldings": int((frozen > 1e-10).sum()),
+                                   "MaxFrozenWeight": frozen.max(), "MaxExecutedWeight": result.weights.max().max()})
+        pd.DataFrame(execution_rows).to_csv(out_dir / "tables" / "execution.csv", index=False)
 
     subperiod_dir = out_dir / "tables" / "subperiods"
     subperiod_dir.mkdir(parents=True, exist_ok=True)
@@ -174,6 +193,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--cost-bps", type=float, default=0.0)
     parser.add_argument("--cost-sweep", type=str, default="0,10,30,50",
                         help="comma separated one-way cost levels in bp for the sensitivity table; empty disables it")
+    execution = parser.add_mutually_exclusive_group()
+    execution.add_argument("--freeze-suspensions", action="store_true")
+    execution.add_argument("--per-side-cost", action="store_true",
+                           help="fund per-side buy and sell costs with immediate target execution")
     parser.add_argument("--no-figures", action="store_true")
     return parser
 
@@ -189,7 +212,8 @@ def main(argv: list[str] | None = None) -> int:
     written = evaluate(arguments.weights, expected_path, arguments.actual, out_dir,
                        risk_free_path=arguments.risk_free, cost_bps=arguments.cost_bps,
                        make_figures=not arguments.no_figures, cost_levels=levels or None,
-                       tradability_data=tradability_data)
+                       tradability_data=tradability_data, freeze_suspensions=arguments.freeze_suspensions,
+                       per_side_cost=arguments.per_side_cost)
     for label, path in written.items():
         print(f"{label}: {path}")
     return 0

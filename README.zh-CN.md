@@ -46,6 +46,19 @@ uv run sta4020-evaluate --tag run1 --cost-bps 10 --weights artifacts/part3/run1/
 
 默认参数 `--cost-sweep 0,10,30,50` 会生成交易成本敏感性分析表；传入 `--cost-sweep ''` 可跳过此表。
 
+## 期末实验
+
+先按数据说明放置课程数据，再从仓库根目录运行。锁定的 `final` 扩展包含复现 Part 1 日频特征所需的 h5py。流程只解压一次描述变量包，期末产物写入独立的 `final` 标签。若已有可信的解压文件，可以传入 `--descriptors /path/to/descriptors.pkl`。
+
+~~~bash
+OPENBLAS_NUM_THREADS=1 uv run --locked --extra risk --extra final python -m sta4020_project.final_pipeline
+uv run --locked --extra risk --extra final pytest tests part2_risk_model/tests
+typst compile --root . docs/final_report.typ part4_evaluation/reports/final/Final_Report.pdf
+typst compile --root . docs/final_slides.typ part4_evaluation/reports/final/Final_Slides.pdf
+~~~
+
+模型选择、输入校验和、实验命令与结果表见 `part4_evaluation/reports/final/`。对照配置与成交规则见[期末实验设计](docs/FINAL_EXPERIMENT_DESIGN.md)。
+
 ## 原始数据
 
 原始数据约 530 MB，由课程资料提供，不纳入版本控制。请将文件复制到 `data/`，保留原文件名，再运行 `uv run sta4020-check-data`。目录结构和文件含义见[数据说明](data/README.zh-CN.md)。只有使用日频数据时才需要读取 `price.h5` 并安装 h5py，因此默认依赖不包含它；如有需要，运行 `uv add h5py`。

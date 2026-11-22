@@ -66,3 +66,28 @@ def test_backtest_rejects_weights_that_do_not_sum_to_one():
     mapping = contracts.target_dates(weights.index, realised.index)
     with pytest.raises(ValueError, match="sum"):
         backtest.run_backtest(weights, realised, mapping)
+
+
+def test_frozen_execution_funds_both_sides_and_preserves_old_holding():
+    from sta4020_project.backtest import execute_rebalance
+
+    previous = np.array([0.30, 0.70, 0.0])
+    target = np.array([0.0, 0.0, 1.0])
+    rates = 0.001
+    weights, turnover, fee = execute_rebalance(target, previous, np.array([True, False, False]), rates)
+    expected_fee = 1.40 * rates / (1 + rates)
+    np.testing.assert_allclose(fee, expected_fee)
+    np.testing.assert_allclose(weights * (1 - fee), [0.30, 0.0, 0.70 - expected_fee])
+    np.testing.assert_allclose(turnover, 1.40 - fee)
+    np.testing.assert_allclose(weights.sum(), 1.0)
+
+
+def test_frozen_execution_charges_initial_purchase_and_next_month_returns():
+    dates = pd.date_range("2023-01-01", periods=3, freq="ME")
+    target = pd.DataFrame([[1.0, 0.0], [0.0, 1.0]], index=dates[:2], columns=["A", "B"])
+    realised = pd.DataFrame([[0.20, 0.0], [0.10, -0.30]], index=dates[1:], columns=target.columns)
+    blocked = pd.DataFrame([[False, False], [True, False]], index=dates[:2], columns=target.columns)
+    result = backtest.run_backtest(target, realised, pd.Series(dates[1:], index=dates[:2]),
+                          cost_bps=10, suspensions=blocked)
+    np.testing.assert_allclose(result.returns, [1.20 / 1.001 - 1, 0.10])
+    np.testing.assert_allclose(result.weights, [[1.0, 0.0], [1.0, 0.0]])

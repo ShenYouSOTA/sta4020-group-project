@@ -75,6 +75,12 @@ def check_artifacts(argv: list[str] | None = None) -> int:
     parser.add_argument("--sample", action="store_true", help="validate artifacts/sample instead")
     arguments = parser.parse_args(argv)
 
+    for name in ("covariance", "weights"):
+        path = getattr(arguments, name)
+        if path is not None and not path.is_file():
+            print(f"missing requested {name} artifact: {path}")
+            return 2
+
     paths = contracts.Paths()
     root = paths.root
     if arguments.sample:
