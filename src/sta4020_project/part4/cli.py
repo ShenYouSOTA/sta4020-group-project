@@ -52,6 +52,8 @@ def evaluate(weights_path: Path, expected_path: Path, actual_path: Path, out_dir
              tradability_data: Path | None = None, freeze_suspensions: bool = False,
              per_side_cost: bool = False) -> dict:
     """Run the full Part 4 evaluation and return the written paths."""
+    out_dir = Path(out_dir)
+    report_module.reject_finalized_report(out_dir)
     expected = contracts.read_wide(expected_path, label=Path(expected_path).name)
     actual = contracts.read_wide(actual_path, label="Actual_Returns")
     weights = contracts.read_weights(weights_path)
@@ -203,8 +205,6 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     arguments = build_parser().parse_args(argv)
     out_dir = arguments.out or (Paths().root / "part4_evaluation" / "reports" / arguments.tag)
-    if (out_dir / "manifest.json").is_file():
-        raise FileExistsError(f"{out_dir} contains a completed final run; select a new output")
     levels = [float(item) for item in arguments.cost_sweep.split(",") if item.strip()]
     expected_path = contracts.resolve_expected_returns(arguments.expected)
     tradability_data = arguments.tradability_data

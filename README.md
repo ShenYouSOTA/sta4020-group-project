@@ -10,7 +10,7 @@ English | [简体中文](README.zh-CN.md)
 [![uv](https://img.shields.io/badge/env-uv-6e40c9)](https://docs.astral.sh/uv/)
 [![Typst](https://img.shields.io/badge/docs-Typst-239dad)](docs/final_report.typ)
 [![OOS Window](https://img.shields.io/badge/OOS-116%20months%20%7C%2050%20stocks-2e7d32)](#key-results)
-[![Tests](https://img.shields.io/badge/tests-96%20passed-2e7d32)](tests/)
+[![Tests](https://img.shields.io/badge/tests-99%20passed-2e7d32)](tests/)
 
 [Deliverables & Previews](#deliverables--previews) · [Key Results](#key-results) · [Architecture](#architecture) · [Quick Start](#quick-start) · [Reproduce Final](#reproduce-final-experiment) · [TODO](#todo--known-issues)
 
@@ -27,7 +27,7 @@ Click either thumbnail or link below to view the compiled PDFs directly in GitHu
 | Deliverable | Direct Preview (PDF) | Source (Typst) | Notes |
 | --- | --- | --- | --- |
 | **Final Report** | [Final_Report.pdf](docs/deliverables/Final_Report.pdf) | [final_report.typ](docs/final_report.typ) | 5 chapters, tables & figures bound to `manifest.json` |
-| **Presentation Slides** | [Final_Slides.pdf](docs/deliverables/Final_Slides.pdf) | [final_slides.typ](docs/final_slides.typ) | 8-slide 16:9 deck covering Parts 1–4 |
+| **Presentation Slides** | [Final_Slides.pdf](docs/deliverables/Final_Slides.pdf) | [final_slides.typ](docs/final_slides.typ) | 10-slide 16:9 deck covering Parts 1–4 |
 | **Experiment Design** | [FINAL_EXPERIMENT_DESIGN.md](docs/FINAL_EXPERIMENT_DESIGN.md) | — | Pre-registered selection, risk & execution rules |
 | **Engineering Plan** | [PLAN.md](docs/PLAN.md) | — | Deadlines, CSV contracts, work breakdown & risks |
 
@@ -42,7 +42,7 @@ Click either thumbnail or link below to view the compiled PDFs directly in GitHu
     </td>
     <td width="50%" align="center">
       <a href="docs/deliverables/Final_Slides.pdf">
-        <img src="docs/previews/slides_p6.png" alt="Final Slides Results Preview" width="96%" />
+        <img src="docs/previews/slides_p8.png" alt="Final Slides Results Preview" width="96%" />
       </a>
       <br />
       <strong><a href="docs/deliverables/Final_Slides.pdf">Open Presentation Slides (PDF)</a></strong>
@@ -51,7 +51,7 @@ Click either thumbnail or link below to view the compiled PDFs directly in GitHu
 </table>
 
 <details>
-<summary><strong>Preview all 8 presentation slides inline</strong> (click to expand)</summary>
+<summary><strong>Preview all 10 presentation slides inline</strong> (click to expand)</summary>
 
 <br />
 
@@ -71,6 +71,10 @@ Click either thumbnail or link below to view the compiled PDFs directly in GitHu
   <tr>
     <td width="50%"><a href="docs/deliverables/Final_Slides.pdf"><img src="docs/previews/slides_p7.png" alt="Slide 7" /></a></td>
     <td width="50%"><a href="docs/deliverables/Final_Slides.pdf"><img src="docs/previews/slides_p8.png" alt="Slide 8" /></a></td>
+  </tr>
+  <tr>
+    <td width="50%"><a href="docs/deliverables/Final_Slides.pdf"><img src="docs/previews/slides_p9.png" alt="Slide 9" /></a></td>
+    <td width="50%"><a href="docs/deliverables/Final_Slides.pdf"><img src="docs/previews/slides_p10.png" alt="Slide 10" /></a></td>
   </tr>
 </table>
 
@@ -125,7 +129,7 @@ flowchart TD
 | `artifacts/` | Cross-part CSV contracts (`part1/`, `part2/`, `part3/`, `sample/`) | Shared |
 | `data/` | Raw course data (~530 MB + 609 MB descriptors, untracked); see [data/README.md](data/README.md) | Shared |
 | `docs/` | Guidelines, plan, Typst sources, compiled PDFs (`deliverables/`) & PNGs (`previews/`) | Shared |
-| `tests/` | Unit & AST architecture tests (96 tests total with `part2_risk_model/tests`) | Shared |
+| `tests/` | Unit & AST architecture tests (99 tests total with `part2_risk_model/tests`) | Shared |
 
 ## Quick Start
 
@@ -200,11 +204,11 @@ Pass `--descriptors /path/to/descriptors.pkl` to reuse an unpacked copy of `data
 
 ## TODO & Known Issues
 
-Tracked backtest, contract, and experimental-design issues from recent audits (Part 4 execution passed a 6-cutoff [Freqtrade-style sliced replay](https://www.freqtrade.io/en/stable/lookahead-analysis/) under fixed weights/flags; 96 tests pass):
+Tracked backtest, contract, and experimental-design issues from recent audits (Part 4 execution passed a 6-cutoff [Freqtrade-style sliced replay](https://www.freqtrade.io/en/stable/lookahead-analysis/) under fixed weights/flags; 99 tests pass):
 
 - [ ] **P1 · Eliminate same-close look-ahead across Parts 2–4** ([broad_risk.py](src/sta4020_project/part2/broad_risk.py), [Part3.py](part3_portfolio/Part3.py), [backtest.py](src/sta4020_project/part4/backtest.py)): Part 1 signals form at the penultimate close (labels through `t-1`), but Model B covariance uses month-`t` full factor/residual returns and month-end styles while assuming fills at the same month-`t` close. Lagging Model B covariance by one month over the common 115 months shifts MVO net Sharpe from `0.3820` to `0.4177`. Adopt one verifiable rule for all strategies and `1/N`: freeze all optimization inputs before the order cutoff ([Backtrader execution](https://www.backtrader.com/docu/order-creation-execution/order-creation-execution/), [LEAN MOC](https://www.quantconnect.com/docs/v2/writing-algorithms/trading-and-orders/order-types/market-on-close-orders)), or defer execution and recompute returns from the actual fill timestamp.
 - [ ] **P1 · Require valid execution-close quotes for fills** ([tradability.py](src/sta4020_project/shared/tradability.py), [backtest.py](src/sta4020_project/part4/backtest.py)): execution masks rely only on vendor flags whose intraday visibility is undocumented. On `2021-10-29`, `300354.SZ` lacked a close quote yet Black–Litterman opened a `4.17%` position (GMV rose from `~1.07%` to `6.93%`) and booked `+34.49%` measured from the stale `2021-10-28` close; freezing missing-quote fills alone reduces Black–Litterman net Sharpe from `0.2853` to `0.2829`. Separate valuation marks from fill validation ([LEAN trade fills](https://www.quantconnect.com/docs/v2/writing-algorithms/reality-modeling/trade-fills/key-concepts)), apply identically to strategies and `1/N`, and rerun affected outputs.
-- [ ] **P1 · Guard all report writers against overwriting finalized runs** ([sample.py](src/sta4020_project/pipeline/sample.py), [cli.py](src/sta4020_project/part4/cli.py)): `sta4020-sample --tag final` writes directly into `reports/final`, overwriting performance tables while leaving the original `manifest.json` intact. Enforce finalized-directory protection inside every report write path.
+- [x] **P1 · Protect completed report directories**. The shared evaluation entry point and report writer reject writes to output directories that contain `manifest.json`. [Report guard](src/sta4020_project/part4/report.py) · [Regression tests](tests/test_report.py)
 - [ ] **P2 · Anchor max drawdown to initial wealth (`1.0`)** ([metrics.py](src/sta4020_project/part4/metrics.py), [Part3.py](part3_portfolio/Part3.py)): `[-20%, +10%]` currently reports `0%` instead of `-20%`. Full-sample net drawdown across all six paths is unchanged, while MVO's 2021 subperiod drawdown corrects from `-5.15%` to `-9.50%`.
 - [ ] **P2 · Enforce 1-to-1 next-month alignment in shared contracts** ([contracts.py](src/sta4020_project/shared/contracts.py), [Part3.py](part3_portfolio/Part3.py), [final.py](src/sta4020_project/pipeline/final.py)): `target_dates` maps both Jan and Feb origins to Mar if Feb returns are missing, passing `audit` until Part 4 fails late. Move the strict next-month check from `final.py` into `contracts.py`.
 - [ ] **P2 · Wire `FinalExperimentConfig` into execution and fix manifest reproduction command** ([config.py](src/sta4020_project/shared/config.py), [final.py](src/sta4020_project/pipeline/final.py)): `part1`, `part2`, `bl_tau`, and `cost_sweep` are logged in `manifest.json` without driving downstream runs (defaults match current constants). Also emit a fresh-tag reproduction command that preserves explicit `--descriptors`.

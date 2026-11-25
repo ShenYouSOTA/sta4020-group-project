@@ -28,7 +28,7 @@ Monthly rebalancing from January 2015 to August 2024
 )
 
 #pagebreak()
-#slide-title[One stock pool across all experiments]
+#slide-title[One stock pool for the main portfolio experiment]
 #grid(columns: (1fr, 1fr, 1fr), gutter: 25pt,
   [*Form the return signal* #linebreak() Penultimate trading close. Train on 72 completed labels and score the fixed pool.],
   [*Update risk and rebalance* #linebreak() At the month-end close, update risk from data realized by that close and target eligible names.],
@@ -36,21 +36,107 @@ Monthly rebalancing from January 2015 to August 2024
 )
 #v(22pt)
 The original FM selected the 50 names on December 30, 2014. The first portfolio
-formed at the next close. All comparisons use the same roster and calendar.
+formed at the next close. All main portfolio comparisons use the same roster and calendar.
 
 #v(13pt)
 #small[Five long-only, fully invested allocations. Eligible 1/N shares their execution and cost model.]
 
 #pagebreak()
-#slide-title[The original FM remains the final forecast]
-#grid-table(("Forecast", "Rank IC", "ICIR", "High coverage IC", "MVO CAGR", "MVO vol.", "Sharpe", "Drawdown"),
-  (1.3fr, .78fr, .7fr, 1fr, .87fr, .85fr, .8fr, .85fr), return-rows)
-#v(18pt)
-- FM uses monthly Rank IC screening, BY correction and averaged ridge coefficients.
-- Six added accounting fields enter one calendar month late and use the same broad training universe.
-- The extension's paired mean IC gain was #num(selection.ic_gain, digits: 4), with a 95% interval of
-  [#num(selection.ic_gain_ci95.at(0), digits: 4), #num(selection.ic_gain_ci95.at(1), digits: 4)].
-  MVO Sharpe declined from #score(selection.fm_mvo_sharpe) to #score(selection.extended_mvo_sharpe).
+// Saved Part 1 notebook tables, January 2015–August 2024.
+// The stock portfolios use the top-25 equal-weight rule and 20 basis points per side.
+#let part-one-results = (
+  main: (
+    ("Fama–MacBeth top 25 (net)", "12.08%", "35.79%", "−49.81%"),
+    ("Fixed-pool equal weight (net)", "7.54%", "33.76%", "−49.97%"),
+    ("CSI 500 price index", "−1.41%", "24.46%", "−58.18%"),
+    ("Fama–French five-factor market proxy", "2.02%", "20.18%", "−40.49%"),
+  ),
+  tree: (
+    ("Fama–MacBeth pool", "Fama–MacBeth", "15.699%", "0.1288", "12.08%", "−49.81%"),
+    ("Fama–MacBeth pool", "Regression trees", "15.672%", "0.1247", "15.34%", "−47.42%"),
+    ("Regression tree pool", "Fama–MacBeth", "15.851%", "0.1461", "11.71%", "−49.64%"),
+    ("Regression tree pool", "Regression trees", "15.832%", "0.1419", "12.36%", "−48.96%"),
+  ),
+)
+#let method-heading(body) = text(21pt, fill: navy, weight: "bold", body)
+#slide-title[Return models and out-of-sample design]
+#text(19pt, grid(columns: (1fr, 1fr), gutter: 40pt, align: top,
+  [
+    #method-heading[Factor screening]
+
+    Both models screen 11 candidates using 72 months of realized training labels. They measure monthly Spearman rank correlations with next-month returns, requiring at least 100 stock pairs per month and 48 valid months.
+
+    Six-month block resampling and the Benjamini–Yekutieli correction give adjusted $q$-values. The models retain factors with $q <= 0.10$.
+
+    #method-heading[Six factors passed at the initial selection]
+
+    - Prior month-end market capitalization
+    - Average trading value over 21 days
+    - Eight-week momentum
+    - Return from the prior month-end to the signal day
+    - Five-day return
+    - Residual volatility net of three principal components
+  ],
+  [
+    #method-heading[Model fitting]
+
+    Fama–MacBeth averages coefficients from 72 monthly cross-sectional ridge regressions. The tree model fits gradient-boosted regression trees with a maximum depth of 3 over 60 rounds.
+
+    #method-heading[Stock selection]
+
+    On December 30, 2014, each model ranked 2,178 eligible A-shares and locked its own top 50. The two pools shared 13 stocks. The first rebalance took place at the next close.
+
+    #method-heading[Out-of-sample evaluation]
+
+    From January 2015 to August 2024 (116 months), the models refit monthly and retained 5 to 9 factors. They scored stocks at the penultimate trading close and rebalanced at month-end. Forecast comparisons use the same stock-months within each pool. The top 25 stocks each target a 4% weight, with fees of 0.20% per side.
+  ],
+))
+
+#pagebreak()
+#slide-title[Fama–MacBeth results on its fixed stock pool]
+#small[Part 1 notebook · January 2015–August 2024 · 116 months]
+#v(19pt)
+#text(20pt, grid-table(
+  ("Portfolio or market reference", "Compound annual growth rate", "Annualized volatility", "Maximum drawdown"),
+  (1.75fr, 1.1fr, .92fr, .87fr),
+  part-one-results.main,
+))
+#v(20pt)
+*Forecast accuracy.* On matched stock-months, Fama–MacBeth had a mean rank information coefficient of 0.1288 and a root mean square error of 15.70%. Individual-stock historical means gave −0.0427 and 15.99%. Out-of-sample $R^2$ against that forecast baseline was 3.67%.
+
+#v(10pt)
+#small[Both stock portfolios are net of 0.20% per side. The market proxy adds the risk-free return to the Fama–French market premium.]
+
+#v(13pt)
+#small[The main mean–variance portfolio experiment retained Fama–MacBeth. With six lagged accounting fields, the gain in mean rank information coefficient was #num(selection.ic_gain, digits: 4) (95% interval #num(selection.ic_gain_ci95.at(0), digits: 4) to #num(selection.ic_gain_ci95.at(1), digits: 4)). The portfolio Sharpe ratio fell from #score(selection.fm_mvo_sharpe) to #score(selection.extended_mvo_sharpe).]
+
+#pagebreak()
+#slide-title[Regression tree results on both fixed pools]
+#small[Part 1 notebook · January 2015–August 2024 · 116 months]
+#v(19pt)
+#text(18pt, table(
+  columns: (1.3fr, 1.17fr, 1.06fr, 1.2fr, 1.2fr, .96fr),
+  align: (x, y) => if x < 2 { left + horizon } else if y == 0 { center } else { right + horizon },
+  inset: (x: 8pt, y: 8pt),
+  fill: (x, y) => if y < 2 { rgb("#e7f0f3") } else if calc.odd(y) { rgb("#f5f8fa") },
+  stroke: (x: none, y: .45pt + rgb("#d6e0e6")),
+  table.header(
+    table.cell(rowspan: 2)[*Fixed stock pool*],
+    table.cell(rowspan: 2)[*Forecast model*],
+    table.cell(colspan: 2)[*Forecast quality*],
+    table.cell(colspan: 2)[*Top-25 equal-weight portfolio*],
+    [*Root mean #linebreak() square error*],
+    [*Mean rank information coefficient*],
+    [*Net compound annual growth rate*],
+    [*Maximum drawdown*],
+  ),
+  ..part-one-results.tree.flatten(),
+))
+#v(20pt)
+- On each pool, the trees had slightly lower forecast error and Fama–MacBeth had a higher mean rank information coefficient. The paired 95% intervals for the error improvement included zero.
+- Using each model's own pool, the tree minus Fama–MacBeth mean monthly net return was −0.03 percentage points. The paired 95% interval was −0.51 to +0.41 percentage points.
+#v(7pt)
+#small[Equal-weight benchmarks returned 7.54% (Fama–MacBeth pool) and 7.34% (tree pool) per year, net of 0.20% per side.]
 
 #pagebreak()
 #slide-title[Model B extends factor history]
