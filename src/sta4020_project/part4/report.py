@@ -174,12 +174,19 @@ def _markdown_table(frame: pd.DataFrame, float_format: str = "{:.4f}") -> str:
     return "\n".join(lines)
 
 
+def reject_finalized_report(out_dir: Path) -> None:
+    """Reject writes to a report directory with a completed run manifest."""
+    if (out_dir / "manifest.json").is_file():
+        raise FileExistsError(f"{out_dir} contains a completed final run. Select a new output directory.")
+
+
 def write_report(results: dict[str, BacktestResult], benchmark: str, out_dir: Path, *,
                  risk_free=0.0, periods_per_year: int = 12, attribution_tables=None,
                  diagnostics=None, test_tables=None, config: dict | None = None,
                  make_figures: bool = True, sensitivity: pd.DataFrame | None = None) -> dict:
     """Write CSVs, figures and REPORT.md; return the paths that were created."""
     out_dir = Path(out_dir)
+    reject_finalized_report(out_dir)
     (out_dir / "tables").mkdir(parents=True, exist_ok=True)
     (out_dir / "figures").mkdir(parents=True, exist_ok=True)
     written: dict[str, str] = {}

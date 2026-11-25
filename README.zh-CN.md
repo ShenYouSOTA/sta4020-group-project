@@ -10,7 +10,7 @@
 [![uv](https://img.shields.io/badge/env-uv-6e40c9)](https://docs.astral.sh/uv/)
 [![Typst](https://img.shields.io/badge/docs-Typst-239dad)](docs/final_report.typ)
 [![OOS Window](https://img.shields.io/badge/OOS-116%20个月%20%7C%2050%20只股票-2e7d32)](#核心结果)
-[![Tests](https://img.shields.io/badge/tests-96%20passed-2e7d32)](tests/)
+[![Tests](https://img.shields.io/badge/tests-99%20passed-2e7d32)](tests/)
 
 [报告与 PPT 预览](#报告与-ppt-预览) · [核心结果](#核心结果) · [项目架构](#项目架构) · [快速开始](#快速开始) · [复现期末实验](#复现期末实验) · [待办清单](#待办与已知问题todo)
 
@@ -27,7 +27,7 @@
 | 交付物 | 在线预览（PDF） | Typst 源码 | 说明 |
 | --- | --- | --- | --- |
 | **期末报告** | [Final_Report.pdf](docs/deliverables/Final_Report.pdf) | [final_report.typ](docs/final_report.typ) | 完整 5 章，数据表与图表自动绑定 `manifest.json` |
-| **汇报 PPT** | [Final_Slides.pdf](docs/deliverables/Final_Slides.pdf) | [final_slides.typ](docs/final_slides.typ) | 8 页 16:9 演示文稿，涵盖 Part 1–4 核心发现 |
+| **汇报 PPT** | [Final_Slides.pdf](docs/deliverables/Final_Slides.pdf) | [final_slides.typ](docs/final_slides.typ) | 10 页 16:9 演示文稿，涵盖 Part 1–4 核心发现 |
 | **期末实验设计** | [FINAL_EXPERIMENT_DESIGN.md](docs/FINAL_EXPERIMENT_DESIGN.md) | — | 预登记模型筛选、风险对照与成交成本口径 |
 | **工程计划** | [PLAN.zh-CN.md](docs/PLAN.zh-CN.md) | — | 截止时间、CSV 产物契约、任务拆解与风险清单 |
 
@@ -42,7 +42,7 @@
     </td>
     <td width="50%" align="center">
       <a href="docs/deliverables/Final_Slides.pdf">
-        <img src="docs/previews/slides_p6.png" alt="汇报 PPT 结果页预览" width="96%" />
+        <img src="docs/previews/slides_p8.png" alt="汇报 PPT 结果页预览" width="96%" />
       </a>
       <br />
       <strong><a href="docs/deliverables/Final_Slides.pdf">查看汇报 PPT（PDF）</a></strong>
@@ -51,7 +51,7 @@
 </table>
 
 <details>
-<summary><strong>点击展开：在线浏览全部 8 页 PPT 缩略图</strong></summary>
+<summary><strong>点击展开：在线浏览全部 10 页 PPT 缩略图</strong></summary>
 
 <br />
 
@@ -71,6 +71,10 @@
   <tr>
     <td width="50%"><a href="docs/deliverables/Final_Slides.pdf"><img src="docs/previews/slides_p7.png" alt="第 7 页" /></a></td>
     <td width="50%"><a href="docs/deliverables/Final_Slides.pdf"><img src="docs/previews/slides_p8.png" alt="第 8 页" /></a></td>
+  </tr>
+  <tr>
+    <td width="50%"><a href="docs/deliverables/Final_Slides.pdf"><img src="docs/previews/slides_p9.png" alt="第 9 页" /></a></td>
+    <td width="50%"><a href="docs/deliverables/Final_Slides.pdf"><img src="docs/previews/slides_p10.png" alt="第 10 页" /></a></td>
   </tr>
 </table>
 
@@ -125,7 +129,7 @@ flowchart TD
 | `artifacts/` | 跨部分 CSV 产物（`part1/`、`part2/`、`part3/`、`sample/`） | 共享 |
 | `data/` | 原始课程数据（约 530 MB + 609 MB 描述变量，不提交）；见[数据说明](data/README.zh-CN.md) | 共享 |
 | `docs/` | 项目要求、计划、Typst 源码、编译成品（`deliverables/`）与预览图（`previews/`） | 共享 |
-| `tests/` | 单元测试与 AST 架构边界测试（与 `part2_risk_model/tests` 共 96 项） | 共享 |
+| `tests/` | 单元测试与 AST 架构边界测试（与 `part2_risk_model/tests` 共 99 项） | 共享 |
 
 ## 快速开始
 
@@ -200,11 +204,11 @@ uv run sta4020-evaluate --tag run1 --cost-bps 10 --freeze-suspensions \
 
 ## 待办与已知问题（TODO）
 
-按优先级记录最新代码与回测审计发现的问题（固定权重与标记下，Part 4 执行层已通过 6 截点 [Freqtrade 风格切片重放](https://www.freqtrade.io/en/stable/lookahead-analysis/)，96 项测试全部通过）：
+按优先级记录最新代码与回测审计发现的问题（固定权重与标记下，Part 4 执行层已通过 6 截点 [Freqtrade 风格切片重放](https://www.freqtrade.io/en/stable/lookahead-analysis/)，99 项测试全部通过）：
 
 - [ ] **P1 · 消除跨 Part 2–4 的同收盘前视**（[broad_risk.py](src/sta4020_project/part2/broad_risk.py)、[Part3.py](part3_portfolio/Part3.py)、[backtest.py](src/sta4020_project/part4/backtest.py)）：Part 1 信号在倒数第二个交易日收盘生成（训练标签最晚到上月），但最终 B 协方差纳入了当月完整因子收益、残差收益与月末风格暴露，同时假设按同一个月末收盘价成交。在共同 115 个月仅将 B 协方差滞后一月，MVO 净 Sharpe 从 `0.3820` 升至 `0.4177`。需在策略与 `1/N` 上统一落地一条可验证规则：保留月末收盘成交则将全部优化输入冻结在下单截止前（参考 [Backtrader 成交规则](https://www.backtrader.com/docu/order-creation-execution/order-creation-execution/)、[LEAN 收盘竞价单](https://www.quantconnect.com/docs/v2/writing-algorithms/trading-and-orders/order-types/market-on-close-orders)），或推迟成交并从实际成交端点重算收益。
 - [ ] **P1 · 将有效执行收盘报价纳入成交验证**（[tradability.py](src/sta4020_project/shared/tradability.py)、[backtest.py](src/sta4020_project/part4/backtest.py)）：当前执行掩码仅依赖供应商标记，且无法确认月底停牌/黑名单何时对策略可见。`2021-10-29` `300354.SZ` 缺失收盘报价，Black–Litterman 仍从零建仓至 `4.17%`（GMV 从约 `1.07%` 加仓至 `6.93%`），随后计入的 `+34.49%` 精确等于 11 月末相对 `10-28` 旧报价的涨幅；单独加入缺价冻结后，Black–Litterman 净 Sharpe 从 `0.2853` 降至 `0.2829`。需将估值沿用旧价与成交报价验证解耦（参考 [LEAN 成交模型](https://www.quantconnect.com/docs/v2/writing-algorithms/reality-modeling/trade-fills/key-concepts)），对策略与 `1/N` 统一应用并重跑受影响结果。
-- [ ] **P1 · 所有报告写入入口统一保护已完成目录**（[sample.py](src/sta4020_project/pipeline/sample.py)、[cli.py](src/sta4020_project/part4/cli.py)）：`sta4020-sample --tag final` 会绕过正式评估 CLI 保护，直接覆盖 `reports/final` 下的业绩表而保留原 `manifest.json`。需在统一写入层拦截对已完成目录的覆盖。
+- [x] **P1 · 保护已完成的报告目录**。共用的评估入口与报告写入层会拒绝覆盖包含 `manifest.json` 的目录。 [保护逻辑](src/sta4020_project/part4/report.py) · [回归测试](tests/test_report.py)
 - [ ] **P2 · 最大回撤补齐期初净值（`1.0`）**（[metrics.py](src/sta4020_project/part4/metrics.py)、[Part3.py](part3_portfolio/Part3.py)）：当前 `[-20%, +10%]` 会算得 `0%` 而非 `-20%`。六条全期净收益路径的最大回撤恰好未受影响，但 2021 年 MVO 分段回撤需从 `-5.15%` 修正为 `-9.50%`。
 - [ ] **P2 · 将严格次月日期校验下沉至共享契约**（[contracts.py](src/sta4020_project/shared/contracts.py)、[Part3.py](part3_portfolio/Part3.py)、[final.py](src/sta4020_project/pipeline/final.py)）：若缺失 2 月收益，1 月末和 2 月末预测都会映射到 3 月末，通用 `audit` 仍返回 `PASS`，Part 3 会写出重复实现日期，Part 4 到模拟末期才报错。需将 `final.py` 的连续次月校验迁移至 `contracts.py` 供各入口共用。
 - [ ] **P2 · 让 `FinalExperimentConfig` 实际驱动下游计算并修正复现命令**（[config.py](src/sta4020_project/shared/config.py)、[final.py](src/sta4020_project/pipeline/final.py)）：`manifest.json` 记录了 `part1`、`part2`、`bl_tau` 与 `cost_sweep`，但修改这些字段目前不会改变对应计算（默认值与当前常量一致）；此外清单里的复现命令复用了已占用的原 `--tag`，且遗漏显式传入的 `--descriptors`。
